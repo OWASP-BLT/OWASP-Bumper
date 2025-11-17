@@ -41,6 +41,13 @@ jobs:
         run: |
           python generate_repo_list.py
       
+      - name: Commit and push generated file
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add index.html
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Update repository list [skip ci]" && git push)
+      
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
