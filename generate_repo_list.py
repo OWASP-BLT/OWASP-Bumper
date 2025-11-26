@@ -286,6 +286,31 @@ def generate_html(repos: List[Dict], org: str) -> str:
             color: #666;
         }}
         
+        .bump-btn {{
+            padding: 6px 12px;
+            background: #ff9800;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: background 0.3s;
+        }}
+        
+        .bump-btn:hover {{
+            background: #f57c00;
+        }}
+        
+        .bump-btn.archived {{
+            background: #bdbdbd;
+            cursor: not-allowed;
+        }}
+        
         .repo-description {{
             color: #666;
             margin-bottom: 12px;
@@ -422,6 +447,26 @@ def generate_html(repos: List[Dict], org: str) -> str:
             return date.toLocaleDateString('en-US', {{ year: 'numeric', month: 'short', day: 'numeric' }});
         }}
         
+        function getBumpIssueUrl(repo) {{
+            const title = encodeURIComponent('Repository Activity Reminder');
+            const body = encodeURIComponent(
+`Hello from the OWASP BLT team! 👋
+
+We noticed that this repository hasn't seen much activity recently. We wanted to reach out to check on the status of this project.
+
+**Please consider one of the following actions:**
+- ✅ If this project is still active, please update it with any recent changes or a simple commit to show it's maintained
+- 📦 If this project is no longer maintained, please consider archiving it to help keep the OWASP organization tidy
+- 💬 If you need help or resources, please let us know in the comments
+
+Thank you for contributing to the OWASP community!
+
+---
+*This issue was created via the [OWASP Bumper](https://github.com/OWASP-BLT/OWASP-Bumper) tool to help keep track of repository activity.*`
+            );
+            return `${{repo.html_url}}/issues/new?title=${{title}}&body=${{body}}`;
+        }}
+        
         function setFilter(filter) {{
             currentFilter = filter;
             
@@ -506,6 +551,10 @@ def generate_html(repos: List[Dict], org: str) -> str:
                     badges.push(`<span class="badge language">${{repo.language}}</span>`);
                 }}
                 
+                const bumpButton = repo.archived 
+                    ? `<span class="bump-btn archived" title="Cannot bump archived repositories">🔔 Bump</span>`
+                    : `<a href="${{getBumpIssueUrl(repo)}}" target="_blank" class="bump-btn" title="Create a reminder issue in this repository">🔔 Bump</a>`;
+                
                 return `
                     <div class="repo-item ${{repo.archived ? 'archived' : ''}}">
                         <div class="repo-header">
@@ -514,6 +563,7 @@ def generate_html(repos: List[Dict], org: str) -> str:
                             </div>
                             <div class="repo-badges">
                                 ${{badges.join('')}}
+                                ${{bumpButton}}
                             </div>
                         </div>
                         <div class="repo-description">${{repo.description || 'No description provided'}}</div>
