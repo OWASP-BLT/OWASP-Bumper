@@ -375,11 +375,16 @@ def generate_html(repos: List[Dict], org: str) -> str:
             </div>
             <div class="btn-group">
                 <select id="sortSelect">
-                    <option value="updated">Sort by: Most Recent</option>
-                    <option value="name">Sort by: Name</option>
-                    <option value="stars">Sort by: Stars</option>
-                    <option value="forks">Sort by: Forks</option>
-                    <option value="created">Sort by: Created Date</option>
+                    <option value="updated-desc">Sort by: Updated (Newest)</option>
+                    <option value="updated-asc">Sort by: Updated (Oldest)</option>
+                    <option value="name-asc">Sort by: Name (A-Z)</option>
+                    <option value="name-desc">Sort by: Name (Z-A)</option>
+                    <option value="stars-desc">Sort by: Stars (Most)</option>
+                    <option value="stars-asc">Sort by: Stars (Fewest)</option>
+                    <option value="forks-desc">Sort by: Forks (Most)</option>
+                    <option value="forks-asc">Sort by: Forks (Fewest)</option>
+                    <option value="created-desc">Sort by: Created (Newest)</option>
+                    <option value="created-asc">Sort by: Created (Oldest)</option>
                 </select>
                 <button id="filterAll" class="active" onclick="setFilter('all')">All</button>
                 <button id="filterProject" onclick="setFilter('project')">Projects</button>
@@ -413,7 +418,7 @@ def generate_html(repos: List[Dict], org: str) -> str:
         const repos = {json.dumps(repo_data, indent=8)};
         
         let currentFilter = 'all';
-        let currentSort = 'updated';
+        let currentSort = 'updated-desc';
         let searchTerm = '';
         
         function formatDate(dateStr) {{
@@ -436,20 +441,35 @@ def generate_html(repos: List[Dict], org: str) -> str:
             const sorted = [...repos];
             
             switch(sortBy) {{
-                case 'updated':
+                case 'updated-desc':
                     sorted.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
                     break;
-                case 'created':
+                case 'updated-asc':
+                    sorted.sort((a, b) => new Date(a.updated_at) - new Date(b.updated_at));
+                    break;
+                case 'created-desc':
                     sorted.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
                     break;
-                case 'name':
+                case 'created-asc':
+                    sorted.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+                    break;
+                case 'name-asc':
                     sorted.sort((a, b) => a.name.localeCompare(b.name));
                     break;
-                case 'stars':
+                case 'name-desc':
+                    sorted.sort((a, b) => b.name.localeCompare(a.name));
+                    break;
+                case 'stars-desc':
                     sorted.sort((a, b) => b.stargazers_count - a.stargazers_count);
                     break;
-                case 'forks':
+                case 'stars-asc':
+                    sorted.sort((a, b) => a.stargazers_count - b.stargazers_count);
+                    break;
+                case 'forks-desc':
                     sorted.sort((a, b) => b.forks_count - a.forks_count);
+                    break;
+                case 'forks-asc':
+                    sorted.sort((a, b) => a.forks_count - b.forks_count);
                     break;
             }}
             
