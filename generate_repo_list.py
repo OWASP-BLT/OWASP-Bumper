@@ -158,7 +158,7 @@ def generate_html(repos: List[Dict], org: str) -> str:
             flex-wrap: wrap;
         }}
         
-        button, select {{
+        button {{
             padding: 12px 20px;
             border: 2px solid #3498db;
             background: white;
@@ -170,7 +170,7 @@ def generate_html(repos: List[Dict], org: str) -> str:
             transition: all 0.3s;
         }}
         
-        button:hover, select:hover {{
+        button:hover {{
             background: #3498db;
             color: white;
         }}
@@ -180,8 +180,34 @@ def generate_html(repos: List[Dict], org: str) -> str:
             color: white;
         }}
         
-        select {{
+        .sort-buttons {{
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }}
+        
+        .sort-btn {{
+            padding: 6px 12px;
+            border: 1px solid #95a5a6;
+            background: white;
+            color: #7f8c8d;
+            border-radius: 4px;
             cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }}
+        
+        .sort-btn:hover {{
+            border-color: #3498db;
+            color: #3498db;
+        }}
+        
+        .sort-btn.active {{
+            background: #3498db;
+            color: white;
+            border-color: #3498db;
         }}
         
         .stats {{
@@ -201,6 +227,36 @@ def generate_html(repos: List[Dict], org: str) -> str:
         .stat strong {{
             color: #2c3e50;
             font-size: 18px;
+        }}
+        
+        .stat.clickable {{
+            cursor: pointer;
+            transition: all 0.3s;
+        }}
+        
+        .stat.clickable:hover {{
+            background: #d5dbdb;
+        }}
+        
+        .stat.clickable.active {{
+            background: #3498db;
+            color: white;
+        }}
+        
+        .stat.clickable.active strong {{
+            color: white;
+        }}
+        
+        .stat.active-within-year {{
+            border-left: 4px solid #27ae60;
+        }}
+        
+        .stat.inactive-1yr {{
+            border-left: 4px solid #e65100;
+        }}
+        
+        .stat.inactive-3yr {{
+            border-left: 4px solid #bf360c;
         }}
         
         .repo-list {{
@@ -393,8 +449,12 @@ def generate_html(repos: List[Dict], org: str) -> str:
                 width: 100%;
             }}
             
-            button, select {{
+            button {{
                 flex: 1;
+            }}
+            
+            .sort-buttons {{
+                justify-content: center;
             }}
         }}
     </style>
@@ -409,22 +469,23 @@ def generate_html(repos: List[Dict], org: str) -> str:
                 <input type="text" id="searchInput" placeholder="Search repositories by name or description...">
             </div>
             <div class="btn-group">
-                <select id="sortSelect">
-                    <option value="updated-desc">Sort by: Updated (Newest)</option>
-                    <option value="updated-asc">Sort by: Updated (Oldest)</option>
-                    <option value="name-asc">Sort by: Name (A-Z)</option>
-                    <option value="name-desc">Sort by: Name (Z-A)</option>
-                    <option value="stars-desc">Sort by: Stars (Most)</option>
-                    <option value="stars-asc">Sort by: Stars (Fewest)</option>
-                    <option value="forks-desc">Sort by: Forks (Most)</option>
-                    <option value="forks-asc">Sort by: Forks (Fewest)</option>
-                    <option value="created-desc">Sort by: Created (Newest)</option>
-                    <option value="created-asc">Sort by: Created (Oldest)</option>
-                </select>
                 <button id="filterAll" class="active" onclick="setFilter('all')">All</button>
                 <button id="filterProject" onclick="setFilter('project')">Projects</button>
                 <button id="filterChapter" onclick="setFilter('chapter')">Chapters</button>
             </div>
+        </div>
+        
+        <div class="sort-buttons">
+            <button class="sort-btn active" data-sort="updated-desc">Updated ↓</button>
+            <button class="sort-btn" data-sort="updated-asc">Updated ↑</button>
+            <button class="sort-btn" data-sort="name-asc">Name A-Z</button>
+            <button class="sort-btn" data-sort="name-desc">Name Z-A</button>
+            <button class="sort-btn" data-sort="stars-desc">Stars ↓</button>
+            <button class="sort-btn" data-sort="stars-asc">Stars ↑</button>
+            <button class="sort-btn" data-sort="forks-desc">Forks ↓</button>
+            <button class="sort-btn" data-sort="forks-asc">Forks ↑</button>
+            <button class="sort-btn" data-sort="created-desc">Created ↓</button>
+            <button class="sort-btn" data-sort="created-asc">Created ↑</button>
         </div>
         
         <div class="stats">
@@ -445,6 +506,18 @@ def generate_html(repos: List[Dict], org: str) -> str:
             </div>
         </div>
         
+        <div class="stats">
+            <div class="stat clickable active-within-year" id="filterActiveYear" onclick="setActivityFilter('within-year')">
+                <strong id="activeYearCount">0</strong> Updated within 1 year
+            </div>
+            <div class="stat clickable inactive-1yr" id="filterInactive1yr" onclick="setActivityFilter('1yr-old')">
+                <strong id="inactive1yrCount">0</strong> Older than 1 year
+            </div>
+            <div class="stat clickable inactive-3yr" id="filterInactive3yr" onclick="setActivityFilter('3yr-old')">
+                <strong id="inactive3yrCount">0</strong> Older than 3 years
+            </div>
+        </div>
+        
         <div id="repoList" class="repo-list"></div>
         
         <footer>
@@ -458,6 +531,7 @@ def generate_html(repos: List[Dict], org: str) -> str:
         let currentFilter = 'all';
         let currentSort = 'updated-desc';
         let searchTerm = '';
+        let activityFilter = 'all';
         
         function formatDate(dateStr) {{
             if (!dateStr) return 'N/A';
@@ -500,6 +574,29 @@ Thank you for contributing to the OWASP community!
             // Update button states
             document.querySelectorAll('.btn-group button').forEach(btn => btn.classList.remove('active'));
             document.getElementById('filter' + filter.charAt(0).toUpperCase() + filter.slice(1)).classList.add('active');
+            
+            renderRepos();
+        }}
+        
+        function setActivityFilter(filter) {{
+            // Toggle filter - if clicking the same one, clear it
+            if (activityFilter === filter) {{
+                activityFilter = 'all';
+            }} else {{
+                activityFilter = filter;
+            }}
+            
+            // Update button states
+            document.querySelectorAll('.stat.clickable').forEach(stat => stat.classList.remove('active'));
+            if (activityFilter !== 'all') {{
+                if (activityFilter === 'within-year') {{
+                    document.getElementById('filterActiveYear').classList.add('active');
+                }} else if (activityFilter === '1yr-old') {{
+                    document.getElementById('filterInactive1yr').classList.add('active');
+                }} else if (activityFilter === '3yr-old') {{
+                    document.getElementById('filterInactive3yr').classList.add('active');
+                }}
+            }}
             
             renderRepos();
         }}
@@ -551,6 +648,15 @@ Thank you for contributing to the OWASP community!
                 filtered = filtered.filter(repo => repo.is_project);
             }} else if (currentFilter === 'chapter') {{
                 filtered = filtered.filter(repo => repo.is_chapter);
+            }}
+            
+            // Apply activity filter
+            if (activityFilter === 'within-year') {{
+                filtered = filtered.filter(repo => getYearsSinceUpdate(repo.updated_at) < 1);
+            }} else if (activityFilter === '1yr-old') {{
+                filtered = filtered.filter(repo => getYearsSinceUpdate(repo.updated_at) >= 1);
+            }} else if (activityFilter === '3yr-old') {{
+                filtered = filtered.filter(repo => getYearsSinceUpdate(repo.updated_at) >= 3);
             }}
             
             // Apply search
@@ -647,6 +753,11 @@ Thank you for contributing to the OWASP community!
             const archivedChapters = repos.filter(r => r.is_chapter && r.archived).length;
             const activeChapters = totalChapters - archivedChapters;
             
+            // Activity-based counts
+            const activeWithinYear = repos.filter(r => getYearsSinceUpdate(r.updated_at) < 1).length;
+            const olderThan1Year = repos.filter(r => getYearsSinceUpdate(r.updated_at) >= 1).length;
+            const olderThan3Years = repos.filter(r => getYearsSinceUpdate(r.updated_at) >= 3).length;
+            
             document.getElementById('totalCount').textContent = totalRepos;
             document.getElementById('visibleCount').textContent = totalRepos;
             document.getElementById('activeReposCount').textContent = activeRepos;
@@ -659,6 +770,11 @@ Thank you for contributing to the OWASP community!
             document.getElementById('chapterCount').textContent = totalChapters;
             document.getElementById('activeChaptersCount').textContent = activeChapters;
             document.getElementById('archivedChaptersCount').textContent = archivedChapters;
+            
+            // Update activity-based counts
+            document.getElementById('activeYearCount').textContent = activeWithinYear;
+            document.getElementById('inactive1yrCount').textContent = olderThan1Year;
+            document.getElementById('inactive3yrCount').textContent = olderThan3Years;
         }}
         
         // Event listeners
@@ -667,9 +783,14 @@ Thank you for contributing to the OWASP community!
             renderRepos();
         }});
         
-        document.getElementById('sortSelect').addEventListener('change', (e) => {{
-            currentSort = e.target.value;
-            renderRepos();
+        // Sort button event listeners
+        document.querySelectorAll('.sort-btn').forEach(btn => {{
+            btn.addEventListener('click', (e) => {{
+                document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                currentSort = e.target.dataset.sort;
+                renderRepos();
+            }});
         }});
         
         // Initial render
