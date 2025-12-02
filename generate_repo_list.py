@@ -180,6 +180,24 @@ def generate_html(repos: List[Dict], org: str) -> str:
             color: white;
         }}
         
+        .checkbox-label {{
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 12px 20px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #3498db;
+            cursor: pointer;
+            user-select: none;
+        }}
+        
+        .checkbox-label input[type="checkbox"] {{
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }}
+        
         .sort-buttons {{
             display: flex;
             gap: 6px;
@@ -473,6 +491,10 @@ def generate_html(repos: List[Dict], org: str) -> str:
                 <button id="filterProject" onclick="setFilter('project')">Projects</button>
                 <button id="filterChapter" onclick="setFilter('chapter')">Chapters</button>
             </div>
+            <label class="checkbox-label">
+                <input type="checkbox" id="hideArchived" checked onchange="toggleHideArchived()">
+                Hide Archived
+            </label>
         </div>
         
         <div class="sort-buttons">
@@ -532,6 +554,7 @@ def generate_html(repos: List[Dict], org: str) -> str:
         let currentSort = 'updated-desc';
         let searchTerm = '';
         let activityFilter = 'all';
+        let hideArchived = true;
         
         function formatDate(dateStr) {{
             if (!dateStr) return 'N/A';
@@ -631,6 +654,11 @@ Thank you for contributing to the OWASP community!
             renderRepos();
         }}
         
+        function toggleHideArchived() {{
+            hideArchived = document.getElementById('hideArchived').checked;
+            renderRepos();
+        }}
+        
         function sortRepos(repos, sortBy) {{
             const sorted = [...repos];
             
@@ -672,6 +700,11 @@ Thank you for contributing to the OWASP community!
         
         function filterRepos(repos) {{
             let filtered = repos;
+            
+            // Apply hide archived filter
+            if (hideArchived) {{
+                filtered = filtered.filter(repo => !repo.archived);
+            }}
             
             // Apply filter
             if (currentFilter === 'project') {{
