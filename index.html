@@ -335,15 +335,18 @@
         <div class="stats">
             <div class="stat">
                 <strong id="totalCount">0</strong> Total Repositories
+                (<strong id="activeReposCount">0</strong> active, <strong id="archivedReposCount">0</strong> archived)
             </div>
             <div class="stat">
                 <strong id="visibleCount">0</strong> Visible
             </div>
             <div class="stat">
                 <strong id="projectCount">0</strong> Projects
+                (<strong id="activeProjectsCount">0</strong> active, <strong id="archivedProjectsCount">0</strong> archived)
             </div>
             <div class="stat">
                 <strong id="chapterCount">0</strong> Chapters
+                (<strong id="activeChaptersCount">0</strong> active, <strong id="archivedChaptersCount">0</strong> archived)
             </div>
         </div>
         
@@ -20497,10 +20500,30 @@ Thank you for contributing to the OWASP community!
         }
         
         function updateStats() {
-            document.getElementById('totalCount').textContent = repos.length;
-            document.getElementById('visibleCount').textContent = repos.length;
-            document.getElementById('projectCount').textContent = repos.filter(r => r.is_project).length;
-            document.getElementById('chapterCount').textContent = repos.filter(r => r.is_chapter).length;
+            const totalRepos = repos.length;
+            const archivedRepos = repos.filter(r => r.archived).length;
+            const activeRepos = totalRepos - archivedRepos;
+            
+            const totalProjects = repos.filter(r => r.is_project).length;
+            const archivedProjects = repos.filter(r => r.is_project && r.archived).length;
+            const activeProjects = totalProjects - archivedProjects;
+            
+            const totalChapters = repos.filter(r => r.is_chapter).length;
+            const archivedChapters = repos.filter(r => r.is_chapter && r.archived).length;
+            const activeChapters = totalChapters - archivedChapters;
+            
+            document.getElementById('totalCount').textContent = totalRepos;
+            document.getElementById('visibleCount').textContent = totalRepos;
+            document.getElementById('activeReposCount').textContent = activeRepos;
+            document.getElementById('archivedReposCount').textContent = archivedRepos;
+            
+            document.getElementById('projectCount').textContent = totalProjects;
+            document.getElementById('activeProjectsCount').textContent = activeProjects;
+            document.getElementById('archivedProjectsCount').textContent = archivedProjects;
+            
+            document.getElementById('chapterCount').textContent = totalChapters;
+            document.getElementById('activeChaptersCount').textContent = activeChapters;
+            document.getElementById('archivedChaptersCount').textContent = archivedChapters;
         }
         
         // Event listeners
