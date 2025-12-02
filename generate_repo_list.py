@@ -6,10 +6,43 @@ Generate an HTML page listing all repositories in the OWASP GitHub organization.
 import json
 import os
 import sys
+import time
 from datetime import datetime
-from typing import List, Dict
+from typing import List, Dict, Optional
 import urllib.request
 import urllib.error
+
+
+def fetch_participation_stats(owner: str, repo: str, token: str = None) -> Optional[List[int]]:
+    """Fetch weekly commit participation stats for a repository (last 52 weeks)."""
+    url = f"https://api.github.com/repos/{owner}/{repo}/stats/participation"
+    
+    headers = {
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "OWASP-Bumper-Repo-List-Generator"
+    }
+    
+    if token:
+        headers["Authorization"] = f"token {token}"
+    
+    req = urllib.request.Request(url, headers=headers)
+    
+    try:
+        with urllib.request.urlopen(req, timeout=10) as response:
+            if response.status == 202:
+                # Stats are being computed, return None
+                return None
+            data = json.loads(response.read().decode())
+            # Return the 'all' array which contains commit counts for all contributors
+            return data.get("all", [])
+    except urllib.error.HTTPError as e:
+        if e.code == 202:
+            # Stats are being computed
+            return None
+        return None
+    except Exception:
+        return None
+
 
 def fetch_repos(org: str, token: str = None) -> List[Dict]:
     """Fetch all repositories for a GitHub organization."""
@@ -80,7 +113,8 @@ def generate_html(repos: List[Dict], org: str) -> str:
             "language": repo.get("language", "") or "N/A",
             "archived": repo.get("archived", False),
             "is_project": "www-project" in repo.get("name", "").lower(),
-            "is_chapter": "www-chapter" in repo.get("name", "").lower()
+            "is_chapter": "www-chapter" in repo.get("name", "").lower(),
+            "sparkline": repo.get("sparkline", [])
         })
     
     html = f"""<!DOCTYPE html>
@@ -424,6 +458,40 @@ def generate_html(repos: List[Dict], org: str) -> str:
             content: "";
         }}
         
+        .sparkline-container {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #f0f0f0;
+        }}
+        
+        .sparkline-label {{
+            font-size: 12px;
+            color: #7f8c8d;
+            white-space: nowrap;
+        }}
+        
+        .sparkline {{
+            stroke: #3498db;
+            fill: none;
+            stroke-width: 1.5;
+        }}
+        
+        .sparkline-fill {{
+            fill: rgba(52, 152, 219, 0.1);
+            stroke: none;
+        }}
+        
+        .repo-item.archived .sparkline {{
+            stroke: #95a5a6;
+        }}
+        
+        .repo-item.archived .sparkline-fill {{
+            fill: rgba(149, 165, 166, 0.1);
+        }}
+        
         .no-results {{
             text-align: center;
             padding: 60px 20px;
@@ -599,6 +667,37 @@ def generate_html(repos: List[Dict], org: str) -> str:
             const diffTime = now - lastUpdate;
             const diffYears = diffTime / (1000 * 60 * 60 * 24 * 365.25);
             return diffYears;
+        }}
+        
+        function generateSparklineSVG(data, width = 100, height = 20) {{
+            if (!data || data.length === 0) {{
+                return '<span class="sparkline-label" style="color: #bdc3c7;">No activity data</span>';
+            }}
+            
+            const max = Math.max(...data, 1);
+            const divisor = data.length > 1 ? data.length - 1 : 1;
+            
+            // Helper to calculate coordinates
+            const getCoord = (value, index) => {{
+                const x = (index / divisor) * width;
+                const y = height - (value / max) * height;
+                return `${{x.toFixed(1)}},${{y.toFixed(1)}}`;
+            }};
+            
+            const points = data.map((value, index) => getCoord(value, index)).join(' ');
+            
+            // Create fill path (area under the line)
+            const fillPoints = data.map((value, index) => getCoord(value, index));
+            const fillPath = `M0,${{height}} L${{fillPoints.join(' L')}} L${{width}},${{height}} Z`;
+            
+            const totalCommits = data.reduce((a, b) => a + b, 0);
+            const title = `${{totalCommits}} commits in the last 52 weeks`;
+            
+            return `<svg class="sparkline-svg" width="${{width}}" height="${{height}}" viewBox="0 0 ${{width}} ${{height}}" title="${{title}}">
+                <title>${{title}}</title>
+                <path class="sparkline-fill" d="${{fillPath}}"></path>
+                <polyline class="sparkline" points="${{points}}"></polyline>
+            </svg>`;
         }}
         
         function getBumpIssueUrl(repo) {{
@@ -778,6 +877,9 @@ Thank you for contributing to the OWASP community!
                         : `<a href="${{getBumpIssueUrl(repo)}}" target="_blank" class="bump-btn" title="Create a reminder issue in this repository">🔔 Bump</a>`;
                 }}
                 
+                // Generate sparkline
+                const sparklineHtml = generateSparklineSVG(repo.sparkline, 120, 24);
+                
                 return `
                     <div class="repo-item ${{repo.archived ? 'archived' : ''}}">
                         <div class="repo-header">
@@ -795,6 +897,10 @@ Thank you for contributing to the OWASP community!
                             <span class="meta-item">🔱 ${{repo.forks_count}} forks</span>
                             <span class="meta-item">📝 ${{repo.open_issues_count}} issues</span>
                             <span class="meta-item">📅 Updated: ${{formatDate(repo.updated_at)}} (${{getTimeAgo(repo.updated_at)}})</span>
+                        </div>
+                        <div class="sparkline-container">
+                            <span class="sparkline-label">📈 Activity (52 weeks):</span>
+                            ${{sparklineHtml}}
                         </div>
                     </div>
                 `;
@@ -870,10 +976,36 @@ def main():
     org = os.environ.get('GITHUB_ORG', 'owasp')
     token = os.environ.get('GITHUB_TOKEN', '')
     output_file = os.environ.get('OUTPUT_FILE', 'index.html')
+    fetch_sparklines = os.environ.get('FETCH_SPARKLINES', 'true').lower() == 'true'
     
     print(f"Fetching repositories for organization: {org}")
     repos = fetch_repos(org, token)
     print(f"Found {len(repos)} repositories")
+    
+    # Fetch participation stats for sparklines (if enabled)
+    if fetch_sparklines and token:
+        print("Fetching activity sparklines for repositories...")
+        total = len(repos)
+        for i, repo in enumerate(repos):
+            if (i + 1) % 50 == 0 or i == 0:
+                print(f"  Fetching sparkline data: {i + 1}/{total}")
+            
+            owner = repo.get("owner", {}).get("login", org)
+            repo_name = repo.get("name", "")
+            
+            if repo_name:
+                sparkline_data = fetch_participation_stats(owner, repo_name, token)
+                repo["sparkline"] = sparkline_data if sparkline_data else []
+                
+                # Small delay to avoid rate limiting
+                if (i + 1) % 100 == 0:
+                    time.sleep(1)
+        
+        print(f"  Completed fetching sparkline data for {total} repositories")
+    else:
+        print("Skipping sparkline data fetch (FETCH_SPARKLINES=false or no token)")
+        for repo in repos:
+            repo["sparkline"] = []
     
     print(f"Generating HTML page...")
     html = generate_html(repos, org.upper())

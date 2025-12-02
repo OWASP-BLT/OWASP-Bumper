@@ -12,6 +12,7 @@ This repository contains a GitHub Action that automatically generates an HTML pa
   - Primary programming language
   - Last updated date
   - Archive status
+  - **Activity sparkline** showing commit activity over the last 52 weeks
   
 - **Smart Filtering**: Quick filter buttons to view:
   - All repositories
@@ -50,12 +51,14 @@ Environment variables:
 - `GITHUB_TOKEN`: GitHub personal access token (optional, but recommended to avoid rate limits)
 - `GITHUB_ORG`: GitHub organization name (default: "owasp")
 - `OUTPUT_FILE`: Output HTML file name (default: "index.html")
+- `FETCH_SPARKLINES`: Set to "true" to fetch activity data for sparklines (default: "true", requires `GITHUB_TOKEN`)
 
 Example:
 ```bash
 export GITHUB_TOKEN=your_token_here
 export GITHUB_ORG=owasp
 export OUTPUT_FILE=repos.html
+export FETCH_SPARKLINES=true
 python3 generate_repo_list.py
 ```
 

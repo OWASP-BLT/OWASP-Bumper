@@ -339,6 +339,40 @@
             content: "";
         }
         
+        .sparkline-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #f0f0f0;
+        }
+        
+        .sparkline-label {
+            font-size: 12px;
+            color: #7f8c8d;
+            white-space: nowrap;
+        }
+        
+        .sparkline {
+            stroke: #3498db;
+            fill: none;
+            stroke-width: 1.5;
+        }
+        
+        .sparkline-fill {
+            fill: rgba(52, 152, 219, 0.1);
+            stroke: none;
+        }
+        
+        .repo-item.archived .sparkline {
+            stroke: #95a5a6;
+        }
+        
+        .repo-item.archived .sparkline-fill {
+            fill: rgba(149, 165, 166, 0.1);
+        }
+        
         .no-results {
             text-align: center;
             padding: 60px 20px;
@@ -20497,6 +20531,36 @@
             return diffYears;
         }
         
+        function generateSparklineSVG(data, width = 100, height = 20) {
+            if (!data || data.length === 0) {
+                return '<span class="sparkline-label" style="color: #bdc3c7;">No activity data</span>';
+            }
+            
+            const max = Math.max(...data, 1);
+            const points = data.map((value, index) => {
+                const x = (index / (data.length - 1)) * width;
+                const y = height - (value / max) * height;
+                return `${x.toFixed(1)},${y.toFixed(1)}`;
+            }).join(' ');
+            
+            // Create fill path (area under the line)
+            const fillPoints = data.map((value, index) => {
+                const x = (index / (data.length - 1)) * width;
+                const y = height - (value / max) * height;
+                return `${x.toFixed(1)},${y.toFixed(1)}`;
+            });
+            const fillPath = `M0,${height} L${fillPoints.join(' L')} L${width},${height} Z`;
+            
+            const totalCommits = data.reduce((a, b) => a + b, 0);
+            const title = `${totalCommits} commits in the last 52 weeks`;
+            
+            return `<svg class="sparkline-svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" title="${title}">
+                <title>${title}</title>
+                <path class="sparkline-fill" d="${fillPath}"></path>
+                <polyline class="sparkline" points="${points}"></polyline>
+            </svg>`;
+        }
+        
         function getBumpIssueUrl(repo) {
             const title = encodeURIComponent('Repository Activity Reminder');
             const body = encodeURIComponent(
@@ -20674,6 +20738,9 @@ Thank you for contributing to the OWASP community!
                         : `<a href="${getBumpIssueUrl(repo)}" target="_blank" class="bump-btn" title="Create a reminder issue in this repository">🔔 Bump</a>`;
                 }
                 
+                // Generate sparkline
+                const sparklineHtml = generateSparklineSVG(repo.sparkline, 120, 24);
+                
                 return `
                     <div class="repo-item ${repo.archived ? 'archived' : ''}">
                         <div class="repo-header">
@@ -20691,6 +20758,10 @@ Thank you for contributing to the OWASP community!
                             <span class="meta-item">🔱 ${repo.forks_count} forks</span>
                             <span class="meta-item">📝 ${repo.open_issues_count} issues</span>
                             <span class="meta-item">📅 Updated: ${formatDate(repo.updated_at)} (${getTimeAgo(repo.updated_at)})</span>
+                        </div>
+                        <div class="sparkline-container">
+                            <span class="sparkline-label">📈 Activity (52 weeks):</span>
+                            ${sparklineHtml}
                         </div>
                     </div>
                 `;
