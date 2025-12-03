@@ -230,6 +230,8 @@ def generate_html(repos: List[Dict], org: str) -> str:
     repo_data = []
     for repo in repos:
         index_md = repo.get("index_md", {}) or {}
+        sparkline = repo.get("sparkline", [])
+        activity_score = sum(sparkline) if sparkline else 0
         repo_data.append({
             "name": repo.get("name", ""),
             "full_name": repo.get("full_name", ""),
@@ -245,7 +247,8 @@ def generate_html(repos: List[Dict], org: str) -> str:
             "archived": repo.get("archived", False),
             "is_project": "www-project" in repo.get("name", "").lower(),
             "is_chapter": "www-chapter" in repo.get("name", "").lower(),
-            "sparkline": repo.get("sparkline", []),
+            "sparkline": sparkline,
+            "activity_score": activity_score,
             # index.md data
             "title": index_md.get("title", ""),
             "tags": index_md.get("tags", []),
@@ -269,12 +272,17 @@ def generate_html(repos: List[Dict], org: str) -> str:
             box-sizing: border-box;
         }}
         
+        html {{
+            overflow-x: hidden;
+        }}
+        
         body {{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
             line-height: 1.6;
             color: #333;
             background: #f5f5f5;
             padding: 20px;
+            overflow-x: hidden;
         }}
         
         .container {{
@@ -701,6 +709,21 @@ def generate_html(repos: List[Dict], org: str) -> str:
             fill: rgba(149, 165, 166, 0.1);
         }}
         
+        .activity-score {{
+            font-size: 12px;
+            font-weight: 600;
+            color: #2980b9;
+            background: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 4px;
+            white-space: nowrap;
+        }}
+        
+        .repo-item.archived .activity-score {{
+            color: #7f8c8d;
+            background: #f0f0f0;
+        }}
+        
         .no-results {{
             text-align: center;
             padding: 60px 20px;
@@ -725,8 +748,19 @@ def generate_html(repos: List[Dict], org: str) -> str:
         }}
         
         @media (max-width: 768px) {{
+            body {{
+                padding: 10px;
+                width: 100%;
+                max-width: 100vw;
+            }}
+            
             .container {{
-                padding: 15px;
+                padding: 12px;
+                max-width: 100%;
+                width: calc(100% - 20px);
+                margin: 0 auto;
+                overflow-x: hidden;
+                box-sizing: border-box;
             }}
             
             h1 {{
@@ -750,11 +784,28 @@ def generate_html(repos: List[Dict], org: str) -> str:
             }}
             
             .sort-buttons {{
-                justify-content: center;
+                justify-content: flex-start;
+                flex-wrap: wrap;
+            }}
+            
+            .sort-btn {{
+                padding: 5px 10px;
+                font-size: 11px;
             }}
             
             .repo-list {{
-                grid-template-columns: 1fr;
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+            }}
+            
+            .repo-item {{
+                width: 100%;
+                max-width: calc(100vw - 44px);
+                padding: 12px;
+                box-sizing: border-box;
+                overflow: hidden;
+                margin: 0;
             }}
             
             .repo-header {{
@@ -769,6 +820,57 @@ def generate_html(repos: List[Dict], org: str) -> str:
             
             .repo-badges {{
                 width: 100%;
+                flex-wrap: wrap;
+            }}
+            
+            .repo-description {{
+                word-break: break-word;
+                overflow-wrap: break-word;
+            }}
+            
+            .repo-meta {{
+                flex-direction: column;
+                gap: 8px;
+            }}
+            
+            .meta-item {{
+                display: inline-flex;
+            }}
+            
+            .sparkline-container {{
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+                max-width: 100%;
+            }}
+            
+            .sparkline-svg {{
+                max-width: 100%;
+            }}
+            
+            .stats {{
+                flex-direction: column;
+                gap: 10px;
+            }}
+            
+            .stat {{
+                width: 100%;
+                text-align: center;
+                box-sizing: border-box;
+            }}
+            
+            .repo-badges {{
+                max-width: 100%;
+            }}
+            
+            .badge {{
+                font-size: 10px;
+                padding: 3px 6px;
+            }}
+            
+            .bump-btn {{
+                padding: 4px 8px;
+                font-size: 11px;
             }}
         }}
     </style>
@@ -802,6 +904,8 @@ def generate_html(repos: List[Dict], org: str) -> str:
             <button class="sort-btn" data-sort="stars-asc">Stars ↑</button>
             <button class="sort-btn" data-sort="forks-desc">Forks ↓</button>
             <button class="sort-btn" data-sort="forks-asc">Forks ↑</button>
+            <button class="sort-btn" data-sort="activity-desc">Activity ↓</button>
+            <button class="sort-btn" data-sort="activity-asc">Activity ↑</button>
             <button class="sort-btn" data-sort="prs-desc">PRs ↓</button>
             <button class="sort-btn" data-sort="prs-asc">PRs ↑</button>
             <button class="sort-btn" data-sort="issues-desc">Issues ↓</button>
@@ -1034,6 +1138,12 @@ Thank you for contributing to the OWASP community!
                 case 'forks-asc':
                     sorted.sort((a, b) => a.forks_count - b.forks_count);
                     break;
+                case 'activity-desc':
+                    sorted.sort((a, b) => b.activity_score - a.activity_score);
+                    break;
+                case 'activity-asc':
+                    sorted.sort((a, b) => a.activity_score - b.activity_score);
+                    break;
                 case 'prs-desc':
                     sorted.sort((a, b) => (b.open_prs_count || 0) - (a.open_prs_count || 0));
                     break;
@@ -1190,8 +1300,9 @@ Thank you for contributing to the OWASP community!
                             <span class="meta-item">📅 ${{getTimeAgo(repo.updated_at)}}</span>
                         </div>
                         <div class="sparkline-container">
-                            <span class="sparkline-label">📈</span>
+                            <span class="sparkline-label">📈 Activity (52 weeks):</span>
                             ${{sparklineHtml}}
+                            <span class="activity-score" title="Total commits in the last 52 weeks">Score: ${{repo.activity_score}}</span>
                         </div>
                     </div>
                 `;
