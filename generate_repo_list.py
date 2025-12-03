@@ -3,14 +3,140 @@
 Generate an HTML page listing all repositories in the OWASP GitHub organization.
 """
 
+import base64
 import json
 import os
+import re
 import sys
 import time
 from datetime import datetime
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 import urllib.request
 import urllib.error
+
+
+def parse_yaml_frontmatter(content: str) -> Dict:
+    """Parse YAML front matter from markdown content."""
+    result = {
+        "title": "",
+        "tags": [],
+        "level": None,
+        "pitch": "",
+        "type": "",
+        "region": "",
+        "country": ""
+    }
+    
+    # Check if content starts with ---
+    if not content.strip().startswith('---'):
+        return result
+    
+    # Find the closing ---
+    lines = content.split('\n')
+    in_frontmatter = False
+    frontmatter_lines = []
+    
+    for line in lines:
+        if line.strip() == '---':
+            if not in_frontmatter:
+                in_frontmatter = True
+                continue
+            else:
+                break
+        if in_frontmatter:
+            frontmatter_lines.append(line)
+    
+    frontmatter_text = '\n'.join(frontmatter_lines)
+    
+    # Parse key-value pairs (simple YAML parsing without external library)
+    for line in frontmatter_lines:
+        if ':' in line:
+            key, _, value = line.partition(':')
+            key = key.strip().lower()
+            value = value.strip()
+            
+            if key == 'title':
+                result['title'] = value
+            elif key == 'tags':
+                # Handle both inline tags and list format
+                if value:
+                    result['tags'] = [t.strip() for t in value.split(',')]
+            elif key == 'level':
+                try:
+                    result['level'] = float(value)
+                except (ValueError, TypeError):
+                    pass
+            elif key == 'pitch':
+                result['pitch'] = value
+            elif key == 'type':
+                result['type'] = value
+            elif key == 'region':
+                result['region'] = value
+            elif key == 'country':
+                result['country'] = value
+    
+    return result
+
+
+def fetch_index_md(owner: str, repo: str, token: str = None) -> Optional[Dict]:
+    """Fetch and parse index.md from a repository."""
+    url = f"https://api.github.com/repos/{owner}/{repo}/contents/index.md"
+    
+    headers = {
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "OWASP-Bumper-Repo-List-Generator"
+    }
+    
+    if token:
+        headers["Authorization"] = f"token {token}"
+    
+    req = urllib.request.Request(url, headers=headers)
+    
+    try:
+        with urllib.request.urlopen(req, timeout=10) as response:
+            data = json.loads(response.read().decode())
+            content_b64 = data.get("content", "")
+            if content_b64:
+                content = base64.b64decode(content_b64).decode('utf-8', errors='ignore')
+                return parse_yaml_frontmatter(content)
+    except urllib.error.HTTPError:
+        return None
+    except Exception:
+        return None
+    
+    return None
+
+
+def fetch_open_prs_count(owner: str, repo: str, token: str = None) -> int:
+    """Fetch the count of open pull requests for a repository."""
+    url = f"https://api.github.com/repos/{owner}/{repo}/pulls?state=open&per_page=1"
+    
+    headers = {
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "OWASP-Bumper-Repo-List-Generator"
+    }
+    
+    if token:
+        headers["Authorization"] = f"token {token}"
+    
+    req = urllib.request.Request(url, headers=headers)
+    
+    try:
+        with urllib.request.urlopen(req, timeout=10) as response:
+            # Check the Link header for total count
+            link_header = response.getheader('Link', '')
+            if 'rel="last"' in link_header:
+                # Extract the page number from the last link
+                match = re.search(r'page=(\d+)>; rel="last"', link_header)
+                if match:
+                    return int(match.group(1))
+            # If no Link header, count the items returned
+            data = json.loads(response.read().decode())
+            return len(data)
+    except urllib.error.HTTPError:
+        return 0
+    except Exception:
+        return 0
 
 
 def fetch_participation_stats(owner: str, repo: str, token: str = None) -> Optional[List[int]]:
@@ -100,6 +226,7 @@ def generate_html(repos: List[Dict], org: str) -> str:
     # Prepare repository data as JSON for JavaScript
     repo_data = []
     for repo in repos:
+        index_md = repo.get("index_md", {}) or {}
         repo_data.append({
             "name": repo.get("name", ""),
             "full_name": repo.get("full_name", ""),
@@ -108,13 +235,22 @@ def generate_html(repos: List[Dict], org: str) -> str:
             "stargazers_count": repo.get("stargazers_count", 0),
             "forks_count": repo.get("forks_count", 0),
             "open_issues_count": repo.get("open_issues_count", 0),
+            "open_prs_count": repo.get("open_prs_count", 0),
             "updated_at": repo.get("updated_at", ""),
             "created_at": repo.get("created_at", ""),
             "language": repo.get("language", "") or "N/A",
             "archived": repo.get("archived", False),
             "is_project": "www-project" in repo.get("name", "").lower(),
             "is_chapter": "www-chapter" in repo.get("name", "").lower(),
-            "sparkline": repo.get("sparkline", [])
+            "sparkline": repo.get("sparkline", []),
+            # index.md data
+            "title": index_md.get("title", ""),
+            "tags": index_md.get("tags", []),
+            "level": index_md.get("level"),
+            "pitch": index_md.get("pitch", ""),
+            "type": index_md.get("type", ""),
+            "region": index_md.get("region", ""),
+            "country": index_md.get("country", "")
         })
     
     html = f"""<!DOCTYPE html>
@@ -313,20 +449,23 @@ def generate_html(repos: List[Dict], org: str) -> str:
         
         .repo-list {{
             display: grid;
-            gap: 15px;
+            grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+            gap: 12px;
         }}
         
         .repo-item {{
-            padding: 20px;
+            padding: 12px 14px;
             border: 1px solid #e1e8ed;
             border-radius: 6px;
             transition: all 0.3s;
             background: white;
+            display: flex;
+            flex-direction: column;
         }}
         
         .repo-item:hover {{
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            transform: translateY(-2px);
+            transform: translateY(-1px);
         }}
         
         .repo-item.archived {{
@@ -338,37 +477,49 @@ def generate_html(repos: List[Dict], org: str) -> str:
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            margin-bottom: 10px;
-            gap: 15px;
+            margin-bottom: 6px;
+            gap: 8px;
         }}
         
         .repo-name {{
             flex: 1;
+            min-width: 0;
         }}
         
         .repo-name a {{
             color: #2980b9;
             text-decoration: none;
-            font-size: 18px;
+            font-size: 14px;
             font-weight: 600;
             word-break: break-word;
+            display: block;
         }}
         
         .repo-name a:hover {{
             text-decoration: underline;
         }}
         
+        .repo-title {{
+            font-size: 11px;
+            color: #666;
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }}
+        
         .repo-badges {{
             display: flex;
-            gap: 8px;
+            gap: 4px;
             flex-wrap: wrap;
             align-items: center;
+            flex-shrink: 0;
         }}
         
         .badge {{
-            padding: 4px 10px;
-            border-radius: 4px;
-            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 9px;
             font-weight: 600;
             text-transform: uppercase;
             white-space: nowrap;
@@ -404,19 +555,50 @@ def generate_html(repos: List[Dict], org: str) -> str:
             color: #bf360c;
         }}
         
+        .badge.level {{
+            background: #9c27b0;
+            color: white;
+        }}
+        
+        .badge.level-1 {{
+            background: #e1bee7;
+            color: #6a1b9a;
+        }}
+        
+        .badge.level-2 {{
+            background: #ce93d8;
+            color: #4a148c;
+        }}
+        
+        .badge.level-3 {{
+            background: #ab47bc;
+            color: white;
+        }}
+        
+        .badge.level-4 {{
+            background: #7b1fa2;
+            color: white;
+        }}
+        
+        .badge.tag {{
+            background: #e0e0e0;
+            color: #424242;
+            font-size: 8px;
+        }}
+        
         .bump-btn {{
-            padding: 6px 12px;
+            padding: 4px 8px;
             background: #ff9800;
             color: white;
             border: none;
-            border-radius: 4px;
-            font-size: 12px;
+            border-radius: 3px;
+            font-size: 10px;
             font-weight: 600;
             cursor: pointer;
             text-decoration: none;
             display: inline-flex;
             align-items: center;
-            gap: 4px;
+            gap: 3px;
             transition: background 0.3s;
         }}
         
@@ -431,14 +613,42 @@ def generate_html(repos: List[Dict], org: str) -> str:
         
         .repo-description {{
             color: #666;
-            margin-bottom: 12px;
-            line-height: 1.5;
+            margin-bottom: 6px;
+            line-height: 1.4;
+            font-size: 12px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            flex-grow: 1;
+        }}
+        
+        .repo-pitch {{
+            color: #555;
+            font-size: 11px;
+            font-style: italic;
+            margin-bottom: 6px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            padding: 4px 6px;
+            background: #f8f9fa;
+            border-radius: 3px;
+            border-left: 2px solid #3498db;
+        }}
+        
+        .repo-tags {{
+            display: flex;
+            gap: 3px;
+            flex-wrap: wrap;
+            margin-bottom: 6px;
         }}
         
         .repo-meta {{
             display: flex;
-            gap: 20px;
-            font-size: 13px;
+            gap: 8px;
+            font-size: 11px;
             color: #7f8c8d;
             flex-wrap: wrap;
         }}
@@ -446,29 +656,25 @@ def generate_html(repos: List[Dict], org: str) -> str:
         .meta-item {{
             display: flex;
             align-items: center;
-            gap: 5px;
+            gap: 3px;
+            white-space: nowrap;
         }}
         
-        .meta-item::before {{
-            content: "•";
-            font-weight: bold;
-        }}
-        
-        .meta-item:first-child::before {{
-            content: "";
+        .meta-item.prs {{
+            color: #9c27b0;
         }}
         
         .sparkline-container {{
             display: flex;
             align-items: center;
-            gap: 8px;
-            margin-top: 8px;
-            padding-top: 8px;
+            gap: 6px;
+            margin-top: 6px;
+            padding-top: 6px;
             border-top: 1px solid #f0f0f0;
         }}
         
         .sparkline-label {{
-            font-size: 12px;
+            font-size: 10px;
             color: #7f8c8d;
             white-space: nowrap;
         }}
@@ -497,6 +703,7 @@ def generate_html(repos: List[Dict], org: str) -> str:
             padding: 60px 20px;
             color: #7f8c8d;
             font-size: 18px;
+            grid-column: 1 / -1;
         }}
         
         .loading {{
@@ -543,6 +750,10 @@ def generate_html(repos: List[Dict], org: str) -> str:
                 justify-content: center;
             }}
             
+            .repo-list {{
+                grid-template-columns: 1fr;
+            }}
+            
             .repo-header {{
                 flex-direction: column;
                 align-items: flex-start;
@@ -566,7 +777,7 @@ def generate_html(repos: List[Dict], org: str) -> str:
         
         <div class="controls">
             <div class="search-box">
-                <input type="text" id="searchInput" placeholder="Search repositories by name or description...">
+                <input type="text" id="searchInput" placeholder="Search by name, description, title, pitch, or tags...">
             </div>
             <div class="btn-group">
                 <button id="filterAll" class="active" onclick="setFilter('all')">All</button>
@@ -588,6 +799,12 @@ def generate_html(repos: List[Dict], org: str) -> str:
             <button class="sort-btn" data-sort="stars-asc">Stars ↑</button>
             <button class="sort-btn" data-sort="forks-desc">Forks ↓</button>
             <button class="sort-btn" data-sort="forks-asc">Forks ↑</button>
+            <button class="sort-btn" data-sort="prs-desc">PRs ↓</button>
+            <button class="sort-btn" data-sort="prs-asc">PRs ↑</button>
+            <button class="sort-btn" data-sort="issues-desc">Issues ↓</button>
+            <button class="sort-btn" data-sort="issues-asc">Issues ↑</button>
+            <button class="sort-btn" data-sort="level-desc">Level ↓</button>
+            <button class="sort-btn" data-sort="level-asc">Level ↑</button>
             <button class="sort-btn" data-sort="created-desc">Created ↓</button>
             <button class="sort-btn" data-sort="created-asc">Created ↑</button>
         </div>
@@ -806,6 +1023,24 @@ Thank you for contributing to the OWASP community!
                 case 'forks-asc':
                     sorted.sort((a, b) => a.forks_count - b.forks_count);
                     break;
+                case 'prs-desc':
+                    sorted.sort((a, b) => (b.open_prs_count || 0) - (a.open_prs_count || 0));
+                    break;
+                case 'prs-asc':
+                    sorted.sort((a, b) => (a.open_prs_count || 0) - (b.open_prs_count || 0));
+                    break;
+                case 'issues-desc':
+                    sorted.sort((a, b) => b.open_issues_count - a.open_issues_count);
+                    break;
+                case 'issues-asc':
+                    sorted.sort((a, b) => a.open_issues_count - b.open_issues_count);
+                    break;
+                case 'level-desc':
+                    sorted.sort((a, b) => (b.level || 0) - (a.level || 0));
+                    break;
+                case 'level-asc':
+                    sorted.sort((a, b) => (a.level || 0) - (b.level || 0));
+                    break;
             }}
             
             return sorted;
@@ -840,7 +1075,10 @@ Thank you for contributing to the OWASP community!
                 const term = searchTerm.toLowerCase();
                 filtered = filtered.filter(repo => 
                     repo.name.toLowerCase().includes(term) || 
-                    repo.description.toLowerCase().includes(term)
+                    repo.description.toLowerCase().includes(term) ||
+                    (repo.title && repo.title.toLowerCase().includes(term)) ||
+                    (repo.pitch && repo.pitch.toLowerCase().includes(term)) ||
+                    (repo.tags && repo.tags.some(tag => tag.toLowerCase().includes(term)))
                 );
             }}
             
@@ -863,6 +1101,14 @@ Thank you for contributing to the OWASP community!
                 const badges = [];
                 const yearsSinceUpdate = getYearsSinceUpdate(repo.updated_at);
                 
+                // Level badge
+                if (repo.level !== null && repo.level !== undefined) {{
+                    const levelClass = repo.level >= 4 ? 'level-4' : 
+                                       repo.level >= 3 ? 'level-3' : 
+                                       repo.level >= 2 ? 'level-2' : 'level-1';
+                    badges.push(`<span class="badge level ${{levelClass}}" title="OWASP Level ${{repo.level}}">L${{repo.level}}</span>`);
+                }}
+                
                 if (repo.is_project) {{
                     badges.push('<span class="badge project">Project</span>');
                 }}
@@ -872,48 +1118,63 @@ Thank you for contributing to the OWASP community!
                 if (repo.archived) {{
                     badges.push('<span class="badge archived">Archived</span>');
                 }}
-                if (repo.language) {{
+                if (repo.language && repo.language !== 'N/A') {{
                     badges.push(`<span class="badge language">${{repo.language}}</span>`);
                 }}
                 
                 // Add activity indicator badges
                 if (yearsSinceUpdate >= 3) {{
-                    badges.push('<span class="badge inactive-3yr" title="No activity in 3+ years">3+ Years Inactive</span>');
+                    badges.push('<span class="badge inactive-3yr" title="No activity in 3+ years">3yr+</span>');
                 }} else if (yearsSinceUpdate >= 1) {{
-                    badges.push('<span class="badge inactive-1yr" title="No activity in 1+ year">1+ Year Inactive</span>');
+                    badges.push('<span class="badge inactive-1yr" title="No activity in 1+ year">1yr+</span>');
                 }}
                 
                 // Only show bump button for repos not updated in over 1 year (and not archived)
                 let bumpButton = '';
                 if (yearsSinceUpdate >= 1) {{
                     bumpButton = repo.archived 
-                        ? `<span class="bump-btn archived" title="Cannot bump archived repositories">🔔 Bump</span>`
-                        : `<a href="${{getBumpIssueUrl(repo)}}" target="_blank" class="bump-btn" title="Create a reminder issue in this repository">🔔 Bump</a>`;
+                        ? `<span class="bump-btn archived" title="Cannot bump archived repositories">🔔</span>`
+                        : `<a href="${{getBumpIssueUrl(repo)}}" target="_blank" class="bump-btn" title="Create a reminder issue in this repository">🔔</a>`;
                 }}
                 
                 // Generate sparkline
-                const sparklineHtml = generateSparklineSVG(repo.sparkline, 120, 24);
+                const sparklineHtml = generateSparklineSVG(repo.sparkline, 80, 16);
+                
+                // Display title if different from name
+                const displayTitle = repo.title && repo.title !== repo.name ? 
+                    `<div class="repo-title" title="${{repo.title}}">${{repo.title}}</div>` : '';
+                
+                // Display pitch if available
+                const pitchHtml = repo.pitch ? 
+                    `<div class="repo-pitch" title="${{repo.pitch}}">${{repo.pitch}}</div>` : '';
+                
+                // Display tags
+                const tagsHtml = repo.tags && repo.tags.length > 0 ?
+                    `<div class="repo-tags">${{repo.tags.slice(0, 5).map(tag => `<span class="badge tag">${{tag}}</span>`).join('')}}</div>` : '';
                 
                 return `
                     <div class="repo-item ${{repo.archived ? 'archived' : ''}}">
                         <div class="repo-header">
                             <div class="repo-name">
                                 <a href="${{repo.html_url}}" target="_blank">${{repo.name}}</a>
+                                ${{displayTitle}}
                             </div>
                             <div class="repo-badges">
                                 ${{badges.join('')}}
                                 ${{bumpButton}}
                             </div>
                         </div>
-                        <div class="repo-description">${{repo.description || 'No description provided'}}</div>
+                        ${{pitchHtml || `<div class="repo-description">${{repo.description || 'No description'}}</div>`}}
+                        ${{tagsHtml}}
                         <div class="repo-meta">
-                            <span class="meta-item">⭐ ${{repo.stargazers_count}} stars</span>
-                            <span class="meta-item">🔱 ${{repo.forks_count}} forks</span>
-                            <span class="meta-item">📝 ${{repo.open_issues_count}} issues</span>
-                            <span class="meta-item">📅 Updated: ${{formatDate(repo.updated_at)}} (${{getTimeAgo(repo.updated_at)}})</span>
+                            <span class="meta-item">⭐ ${{repo.stargazers_count}}</span>
+                            <span class="meta-item">🔱 ${{repo.forks_count}}</span>
+                            <span class="meta-item">📝 ${{repo.open_issues_count}}</span>
+                            ${{repo.open_prs_count > 0 ? `<span class="meta-item prs">🔀 ${{repo.open_prs_count}} PRs</span>` : ''}}
+                            <span class="meta-item">📅 ${{getTimeAgo(repo.updated_at)}}</span>
                         </div>
                         <div class="sparkline-container">
-                            <span class="sparkline-label">📈 Activity (52 weeks):</span>
+                            <span class="sparkline-label">📈</span>
                             ${{sparklineHtml}}
                         </div>
                     </div>
@@ -991,6 +1252,7 @@ def main():
     token = os.environ.get('GITHUB_TOKEN', '')
     output_file = os.environ.get('OUTPUT_FILE', 'index.html')
     fetch_sparklines = os.environ.get('FETCH_SPARKLINES', 'true').lower() == 'true'
+    fetch_metadata = os.environ.get('FETCH_METADATA', 'true').lower() == 'true'
     
     print(f"Fetching repositories for organization: {org}")
     repos = fetch_repos(org, token)
@@ -1020,6 +1282,37 @@ def main():
         print("Skipping sparkline data fetch (FETCH_SPARKLINES=false or no token)")
         for repo in repos:
             repo["sparkline"] = []
+    
+    # Fetch index.md metadata and PR counts (if enabled)
+    if fetch_metadata and token:
+        print("Fetching index.md metadata and PR counts for repositories...")
+        total = len(repos)
+        for i, repo in enumerate(repos):
+            if (i + 1) % 50 == 0 or i == 0:
+                print(f"  Fetching metadata: {i + 1}/{total}")
+            
+            owner = repo.get("owner", {}).get("login", org)
+            repo_name = repo.get("name", "")
+            
+            if repo_name:
+                # Fetch index.md
+                index_md_data = fetch_index_md(owner, repo_name, token)
+                repo["index_md"] = index_md_data if index_md_data else {}
+                
+                # Fetch PR count
+                pr_count = fetch_open_prs_count(owner, repo_name, token)
+                repo["open_prs_count"] = pr_count
+                
+                # Small delay to avoid rate limiting
+                if (i + 1) % 100 == 0:
+                    time.sleep(1)
+        
+        print(f"  Completed fetching metadata for {total} repositories")
+    else:
+        print("Skipping metadata fetch (FETCH_METADATA=false or no token)")
+        for repo in repos:
+            repo["index_md"] = {}
+            repo["open_prs_count"] = 0
     
     print(f"Generating HTML page...")
     html = generate_html(repos, org.upper())
