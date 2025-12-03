@@ -60,7 +60,10 @@ def parse_yaml_frontmatter(content: str) -> Dict:
             elif key == 'tags':
                 # Handle both inline tags and list format
                 if value:
-                    result['tags'] = [t.strip() for t in value.split(',')]
+                    # Handle [tag1, tag2] format
+                    if value.startswith('[') and value.endswith(']'):
+                        value = value[1:-1]
+                    result['tags'] = [t.strip().strip('"\'') for t in value.split(',') if t.strip()]
             elif key == 'level':
                 try:
                     result['level'] = float(value)
@@ -97,7 +100,7 @@ def fetch_index_md(owner: str, repo: str, token: str = None) -> Optional[Dict]:
             data = json.loads(response.read().decode())
             content_b64 = data.get("content", "")
             if content_b64:
-                content = base64.b64decode(content_b64).decode('utf-8', errors='ignore')
+                content = base64.b64decode(content_b64).decode('utf-8', errors='replace')
                 return parse_yaml_frontmatter(content)
     except urllib.error.HTTPError:
         return None
@@ -855,6 +858,14 @@ def generate_html(repos: List[Dict], org: str) -> str:
         let activityFilter = 'all';
         let hideArchived = true;
         
+        // HTML escape function to prevent XSS
+        function escapeHtml(text) {{
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }}
+        
         function formatDate(dateStr) {{
             if (!dateStr) return 'N/A';
             const date = new Date(dateStr);
@@ -1140,23 +1151,28 @@ Thank you for contributing to the OWASP community!
                 // Generate sparkline
                 const sparklineHtml = generateSparklineSVG(repo.sparkline, 80, 16);
                 
-                // Display title if different from name
+                // Display title if different from name (escaped)
+                const escapedTitle = escapeHtml(repo.title);
                 const displayTitle = repo.title && repo.title !== repo.name ? 
-                    `<div class="repo-title" title="${{repo.title}}">${{repo.title}}</div>` : '';
+                    `<div class="repo-title" title="${{escapedTitle}}">${{escapedTitle}}</div>` : '';
                 
-                // Display pitch if available
+                // Display pitch if available (escaped)
+                const escapedPitch = escapeHtml(repo.pitch);
                 const pitchHtml = repo.pitch ? 
-                    `<div class="repo-pitch" title="${{repo.pitch}}">${{repo.pitch}}</div>` : '';
+                    `<div class="repo-pitch" title="${{escapedPitch}}">${{escapedPitch}}</div>` : '';
                 
-                // Display tags
+                // Display tags (escaped)
                 const tagsHtml = repo.tags && repo.tags.length > 0 ?
-                    `<div class="repo-tags">${{repo.tags.slice(0, 5).map(tag => `<span class="badge tag">${{tag}}</span>`).join('')}}</div>` : '';
+                    `<div class="repo-tags">${{repo.tags.slice(0, 5).map(tag => `<span class="badge tag">${{escapeHtml(tag)}}</span>`).join('')}}</div>` : '';
+                
+                // Escape description
+                const escapedDesc = escapeHtml(repo.description) || 'No description';
                 
                 return `
                     <div class="repo-item ${{repo.archived ? 'archived' : ''}}">
                         <div class="repo-header">
                             <div class="repo-name">
-                                <a href="${{repo.html_url}}" target="_blank">${{repo.name}}</a>
+                                <a href="${{repo.html_url}}" target="_blank">${{escapeHtml(repo.name)}}</a>
                                 ${{displayTitle}}
                             </div>
                             <div class="repo-badges">
@@ -1164,7 +1180,7 @@ Thank you for contributing to the OWASP community!
                                 ${{bumpButton}}
                             </div>
                         </div>
-                        ${{pitchHtml || `<div class="repo-description">${{repo.description || 'No description'}}</div>`}}
+                        ${{pitchHtml || `<div class="repo-description">${{escapedDesc}}</div>`}}
                         ${{tagsHtml}}
                         <div class="repo-meta">
                             <span class="meta-item">⭐ ${{repo.stargazers_count}}</span>
