@@ -661,7 +661,8 @@ def generate_html(repos: List[Dict], org: str) -> str:
             gap: 8px;
             font-size: 11px;
             color: #7f8c8d;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
+            overflow-x: auto;
         }}
         
         .meta-item {{
@@ -669,6 +670,7 @@ def generate_html(repos: List[Dict], org: str) -> str:
             align-items: center;
             gap: 3px;
             white-space: nowrap;
+            flex-shrink: 0;
         }}
         
         .meta-item.prs {{
@@ -682,12 +684,15 @@ def generate_html(repos: List[Dict], org: str) -> str:
             margin-top: 6px;
             padding-top: 6px;
             border-top: 1px solid #f0f0f0;
+            flex-wrap: nowrap;
+            overflow-x: auto;
         }}
         
         .sparkline-label {{
             font-size: 10px;
             color: #7f8c8d;
             white-space: nowrap;
+            flex-shrink: 0;
         }}
         
         .sparkline {{
@@ -717,6 +722,7 @@ def generate_html(repos: List[Dict], org: str) -> str:
             padding: 2px 8px;
             border-radius: 4px;
             white-space: nowrap;
+            flex-shrink: 0;
         }}
         
         .repo-item.archived .activity-score {{
@@ -829,19 +835,24 @@ def generate_html(repos: List[Dict], org: str) -> str:
             }}
             
             .repo-meta {{
-                flex-direction: column;
+                flex-direction: row;
+                flex-wrap: nowrap;
+                overflow-x: auto;
                 gap: 8px;
             }}
             
             .meta-item {{
                 display: inline-flex;
+                flex-shrink: 0;
             }}
             
             .sparkline-container {{
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 8px;
+                flex-direction: row;
+                align-items: center;
+                gap: 6px;
                 max-width: 100%;
+                flex-wrap: nowrap;
+                overflow-x: auto;
             }}
             
             .sparkline-svg {{
@@ -877,8 +888,9 @@ def generate_html(repos: List[Dict], org: str) -> str:
 </head>
 <body>
     <div class="container">
-        <h1>{org} Repositories</h1>
-        <div class="subtitle">Comprehensive listing of all GitHub repositories | <a href="https://github.com/OWASP-BLT/OWASP-Bumper" target="_blank" style="color: #3498db;">View on GitHub</a></div>
+        <h1>OWASP Bumper 🚀💪</h1>
+        <div class="subtitle">This application aims to help encourage repositories to stay active by giving them a bump of a new issue with one click! 🔔✨</div>
+        <div class="subtitle">Comprehensive listing of all {org} GitHub repositories | <a href="https://github.com/OWASP-BLT/OWASP-Bumper" target="_blank" style="color: #3498db;">View on GitHub</a></div>
         
         <div class="controls">
             <div class="search-box">
