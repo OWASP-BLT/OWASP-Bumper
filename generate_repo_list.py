@@ -142,6 +142,44 @@ def fetch_open_prs_count(owner: str, repo: str, token: str = None) -> int:
         return 0
 
 
+def fetch_last_commit(owner: str, repo: str, token: str = None) -> Optional[Dict]:
+    """Fetch the most recent commit for a repository."""
+    url = f"https://api.github.com/repos/{owner}/{repo}/commits?per_page=1"
+
+    headers = {
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "OWASP-Bumper-Repo-List-Generator"
+    }
+
+    if token:
+        headers["Authorization"] = f"token {token}"
+
+    req = urllib.request.Request(url, headers=headers)
+
+    try:
+        with urllib.request.urlopen(req, timeout=10) as response:
+            data = json.loads(response.read().decode())
+            if data:
+                commit = data[0]
+                author_obj = commit.get("author") or {}
+                git_author = commit.get("commit", {}).get("author") or {}
+                message = commit.get("commit", {}).get("message", "") or ""
+                # Use only the first line of the commit message
+                message = message.split("\n")[0].strip()
+                return {
+                    "message": message,
+                    "author": author_obj.get("login") or git_author.get("name", ""),
+                    "avatar_url": author_obj.get("avatar_url", ""),
+                    "author_url": author_obj.get("html_url", ""),
+                }
+    except urllib.error.HTTPError:
+        return None
+    except Exception:
+        return None
+
+    return None
+
+
 def fetch_participation_stats(owner: str, repo: str, token: str = None) -> Optional[List[int]]:
     """Fetch weekly commit participation stats for a repository (last 52 weeks)."""
     url = f"https://api.github.com/repos/{owner}/{repo}/stats/participation"
@@ -249,6 +287,13 @@ def generate_html(repos: List[Dict], org: str) -> str:
             "is_chapter": "www-chapter" in repo.get("name", "").lower(),
             "sparkline": sparkline,
             "activity_score": activity_score,
+            # last commit data
+            **{
+                "last_commit_message": (lc := repo.get("last_commit") or {}).get("message", ""),
+                "last_commit_author": lc.get("author", ""),
+                "last_commit_avatar_url": lc.get("avatar_url", ""),
+                "last_commit_author_url": lc.get("author_url", ""),
+            },
             # index.md data
             "title": index_md.get("title", ""),
             "tags": index_md.get("tags", []),
@@ -728,6 +773,60 @@ def generate_html(repos: List[Dict], org: str) -> str:
         .repo-item.archived .activity-score {{
             color: #475569;
             background: #f8fafc;
+        }}
+        
+        .last-commit {{
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 6px;
+            padding-top: 6px;
+            border-top: 1px solid #f0f0f0;
+            font-size: 11px;
+            color: #475569;
+            overflow: hidden;
+        }}
+        
+        .last-commit-avatar {{
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            vertical-align: middle;
+        }}
+        
+        .last-commit-author {{
+            font-weight: 600;
+            white-space: nowrap;
+            flex-shrink: 0;
+            color: #0f172a;
+            text-decoration: none;
+        }}
+        
+        .last-commit-author:hover {{
+            text-decoration: underline;
+        }}
+        
+        .last-commit-message {{
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: #475569;
+        }}
+        
+        .last-commit-cell {{
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            min-width: 160px;
+            max-width: 240px;
+        }}
+        
+        .last-commit-cell-text {{
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 11px;
         }}
         
         .no-results {{
@@ -1406,6 +1505,24 @@ Thank you for contributing to the OWASP community!
                 // Escape description
                 const escapedDesc = escapeHtml(repo.description) || 'No description';
                 
+                // Last commit section
+                let lastCommitHtml = '';
+                if (repo.last_commit_message || repo.last_commit_author) {{
+                    const avatarHtml = repo.last_commit_avatar_url
+                        ? `<img class="last-commit-avatar" src="${{escapeHtml(repo.last_commit_avatar_url)}}" alt="${{escapeHtml(repo.last_commit_author)}}" loading="lazy">`
+                        : '💬';
+                    const authorHtml = repo.last_commit_author
+                        ? (repo.last_commit_author_url
+                            ? `<a class="last-commit-author" href="${{escapeHtml(repo.last_commit_author_url)}}" target="_blank" rel="noopener noreferrer">${{escapeHtml(repo.last_commit_author)}}</a>`
+                            : `<span class="last-commit-author">${{escapeHtml(repo.last_commit_author)}}</span>`)
+                        : '';
+                    lastCommitHtml = `<div class="last-commit">
+                        ${{avatarHtml}}
+                        ${{authorHtml}}
+                        <span class="last-commit-message" title="${{escapeHtml(repo.last_commit_message)}}">${{escapeHtml(repo.last_commit_message)}}</span>
+                    </div>`;
+                }}
+                
                 return `
                     <div class="repo-item ${{repo.archived ? 'archived' : ''}}">
                         <div class="repo-header">
@@ -1427,6 +1544,7 @@ Thank you for contributing to the OWASP community!
                             ${{repo.open_prs_count > 0 ? `<span class="meta-item prs">🔀 ${{repo.open_prs_count}} PRs</span>` : ''}}
                             <span class="meta-item">📅 ${{getTimeAgo(repo.updated_at)}}</span>
                         </div>
+                        ${{lastCommitHtml}}
                         <div class="sparkline-container">
                             <span class="sparkline-label">📈 Activity (52 weeks):</span>
                             ${{sparklineHtml}}
@@ -1463,6 +1581,7 @@ Thank you for contributing to the OWASP community!
                 {{ key: 'activity',    label: '📈 Activity', sortKey: 'activity' }},
                 {{ key: 'updated',     label: '📅 Updated',  sortKey: 'updated' }},
                 {{ key: 'created',     label: '📅 Created',  sortKey: 'created' }},
+                {{ key: 'lastcommit',  label: '💬 Last Commit', sortKey: null }},
                 {{ key: 'bump',        label: 'Bump',        sortKey: null }},
             ];
             
@@ -1520,6 +1639,22 @@ Thank you for contributing to the OWASP community!
                     ? `<div class="repo-title" title="${{escapeHtml(repo.title)}}">${{escapeHtml(repo.title)}}</div>`
                     : '';
                 
+                // Last commit cell
+                let lastCommitCell = '';
+                if (repo.last_commit_message || repo.last_commit_author) {{
+                    const avatarHtml = repo.last_commit_avatar_url
+                        ? `<img class="last-commit-avatar" src="${{escapeHtml(repo.last_commit_avatar_url)}}" alt="${{escapeHtml(repo.last_commit_author)}}" loading="lazy"> `
+                        : '';
+                    const authorHtml = repo.last_commit_author
+                        ? (repo.last_commit_author_url
+                            ? `<a class="last-commit-author" href="${{escapeHtml(repo.last_commit_author_url)}}" target="_blank" rel="noopener noreferrer">${{escapeHtml(repo.last_commit_author)}}</a>: `
+                            : `<span class="last-commit-author">${{escapeHtml(repo.last_commit_author)}}</span>: `)
+                        : '';
+                    lastCommitCell = `<div class="last-commit-cell">
+                        ${{avatarHtml}}<span class="last-commit-cell-text" title="${{escapeHtml(repo.last_commit_author + (repo.last_commit_message ? ': ' + repo.last_commit_message : ''))}}">${{authorHtml}}${{escapeHtml(repo.last_commit_message)}}</span>
+                    </div>`;
+                }}
+                
                 return `<tr class="${{repo.archived ? 'archived' : ''}}">
                     <td><a href="${{repo.html_url}}" target="_blank" class="table-name-link">${{escapeHtml(repo.name)}}</a>${{titleHtml}}</td>
                     <td><div style="display:flex;gap:3px;flex-wrap:wrap">${{typeBadges.join('')}}</div></td>
@@ -1534,6 +1669,7 @@ Thank you for contributing to the OWASP community!
                     <td style="white-space:nowrap">${{sparklineHtml}} <span style="font-size:11px;font-weight:600;color:#E10101">${{repo.activity_score}}</span></td>
                     <td style="white-space:nowrap;font-size:12px">${{getTimeAgo(repo.updated_at)}}</td>
                     <td style="white-space:nowrap;font-size:12px">${{formatDate(repo.created_at)}}</td>
+                    <td>${{lastCommitCell}}</td>
                     <td>${{bumpButton}}</td>
                 </tr>`;
             }}).join('');
@@ -1671,6 +1807,10 @@ def main():
                 pr_count = fetch_open_prs_count(owner, repo_name, token)
                 repo["open_prs_count"] = pr_count
                 
+                # Fetch last commit
+                last_commit_data = fetch_last_commit(owner, repo_name, token)
+                repo["last_commit"] = last_commit_data if last_commit_data else {}
+                
                 # Small delay to avoid rate limiting
                 if (i + 1) % 100 == 0:
                     time.sleep(1)
@@ -1681,6 +1821,7 @@ def main():
         for repo in repos:
             repo["index_md"] = {}
             repo["open_prs_count"] = 0
+            repo["last_commit"] = {}
     
     print(f"Generating HTML page...")
     html = generate_html(repos, org.upper())
