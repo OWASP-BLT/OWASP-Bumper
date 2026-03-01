@@ -279,8 +279,8 @@ def generate_html(repos: List[Dict], org: str) -> str:
         body {{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
             line-height: 1.6;
-            color: #333;
-            background: #f5f5f5;
+            color: #0f172a;
+            background: #f8fafc;
             padding: 20px;
             overflow-x: hidden;
         }}
@@ -295,13 +295,13 @@ def generate_html(repos: List[Dict], org: str) -> str:
         }}
         
         h1 {{
-            color: #2c3e50;
+            color: #0f172a;
             margin-bottom: 10px;
             font-size: 2.5em;
         }}
         
         .subtitle {{
-            color: #7f8c8d;
+            color: #475569;
             margin-bottom: 30px;
             font-size: 1.1em;
         }}
@@ -322,7 +322,7 @@ def generate_html(repos: List[Dict], org: str) -> str:
         input[type="text"] {{
             width: 100%;
             padding: 12px 15px;
-            border: 2px solid #ddd;
+            border: 2px solid #e2e8f0;
             border-radius: 6px;
             font-size: 14px;
             transition: border-color 0.3s;
@@ -330,7 +330,7 @@ def generate_html(repos: List[Dict], org: str) -> str:
         
         input[type="text"]:focus {{
             outline: none;
-            border-color: #3498db;
+            border-color: #E10101;
         }}
         
         .btn-group {{
@@ -341,9 +341,9 @@ def generate_html(repos: List[Dict], org: str) -> str:
         
         button {{
             padding: 12px 20px;
-            border: 2px solid #3498db;
+            border: 2px solid #E10101;
             background: white;
-            color: #3498db;
+            color: #E10101;
             border-radius: 6px;
             cursor: pointer;
             font-size: 14px;
@@ -352,12 +352,12 @@ def generate_html(repos: List[Dict], org: str) -> str:
         }}
         
         button:hover {{
-            background: #3498db;
+            background: #E10101;
             color: white;
         }}
         
         button.active {{
-            background: #3498db;
+            background: #E10101;
             color: white;
         }}
         
@@ -368,7 +368,7 @@ def generate_html(repos: List[Dict], org: str) -> str:
             padding: 12px 20px;
             font-size: 14px;
             font-weight: 600;
-            color: #3498db;
+            color: #E10101;
             cursor: pointer;
             user-select: none;
         }}
@@ -388,9 +388,9 @@ def generate_html(repos: List[Dict], org: str) -> str:
         
         .sort-btn {{
             padding: 6px 12px;
-            border: 1px solid #95a5a6;
+            border: 1px solid #e2e8f0;
             background: white;
-            color: #7f8c8d;
+            color: #475569;
             border-radius: 4px;
             cursor: pointer;
             font-size: 12px;
@@ -399,14 +399,14 @@ def generate_html(repos: List[Dict], org: str) -> str:
         }}
         
         .sort-btn:hover {{
-            border-color: #3498db;
-            color: #3498db;
+            border-color: #E10101;
+            color: #E10101;
         }}
         
         .sort-btn.active {{
-            background: #3498db;
+            background: #E10101;
             color: white;
-            border-color: #3498db;
+            border-color: #E10101;
         }}
         
         .stats {{
@@ -424,7 +424,7 @@ def generate_html(repos: List[Dict], org: str) -> str:
         }}
         
         .stat strong {{
-            color: #2c3e50;
+            color: #0f172a;
             font-size: 18px;
         }}
         
@@ -438,7 +438,7 @@ def generate_html(repos: List[Dict], org: str) -> str:
         }}
         
         .stat.clickable.active {{
-            background: #3498db;
+            background: #E10101;
             color: white;
         }}
         
@@ -498,7 +498,7 @@ def generate_html(repos: List[Dict], org: str) -> str:
         }}
         
         .repo-name a {{
-            color: #2980b9;
+            color: #E10101;
             text-decoration: none;
             font-size: 14px;
             font-weight: 600;
@@ -542,8 +542,8 @@ def generate_html(repos: List[Dict], org: str) -> str:
         }}
         
         .badge.chapter {{
-            background: #e3f2fd;
-            color: #1565c0;
+            background: #fee2e2;
+            color: #dc2626;
         }}
         
         .badge.archived {{
@@ -552,8 +552,8 @@ def generate_html(repos: List[Dict], org: str) -> str:
         }}
         
         .badge.language {{
-            background: #f5f5f5;
-            color: #666;
+            background: #f8fafc;
+            color: #475569;
         }}
         
         .badge.inactive-1yr {{
@@ -644,9 +644,9 @@ def generate_html(repos: List[Dict], org: str) -> str:
             -webkit-box-orient: vertical;
             overflow: hidden;
             padding: 4px 6px;
-            background: #f8f9fa;
+            background: #f8fafc;
             border-radius: 3px;
-            border-left: 2px solid #3498db;
+            border-left: 2px solid #E10101;
         }}
         
         .repo-tags {{
@@ -660,7 +660,7 @@ def generate_html(repos: List[Dict], org: str) -> str:
             display: flex;
             gap: 8px;
             font-size: 11px;
-            color: #7f8c8d;
+            color: #475569;
             flex-wrap: nowrap;
             overflow-x: auto;
         }}
@@ -690,35 +690,35 @@ def generate_html(repos: List[Dict], org: str) -> str:
         
         .sparkline-label {{
             font-size: 10px;
-            color: #7f8c8d;
+            color: #475569;
             white-space: nowrap;
             flex-shrink: 0;
         }}
         
         .sparkline {{
-            stroke: #3498db;
+            stroke: #E10101;
             fill: none;
             stroke-width: 1.5;
         }}
         
         .sparkline-fill {{
-            fill: rgba(52, 152, 219, 0.1);
+            fill: rgba(225, 1, 1, 0.1);
             stroke: none;
         }}
         
         .repo-item.archived .sparkline {{
-            stroke: #95a5a6;
+            stroke: #cbd5e1;
         }}
         
         .repo-item.archived .sparkline-fill {{
-            fill: rgba(149, 165, 166, 0.1);
+            fill: rgba(203, 213, 225, 0.1);
         }}
         
         .activity-score {{
             font-size: 12px;
             font-weight: 600;
-            color: #2980b9;
-            background: #e3f2fd;
+            color: #E10101;
+            background: #fee2e2;
             padding: 2px 8px;
             border-radius: 4px;
             white-space: nowrap;
@@ -726,14 +726,14 @@ def generate_html(repos: List[Dict], org: str) -> str:
         }}
         
         .repo-item.archived .activity-score {{
-            color: #7f8c8d;
-            background: #f0f0f0;
+            color: #475569;
+            background: #f8fafc;
         }}
         
         .no-results {{
             text-align: center;
             padding: 60px 20px;
-            color: #7f8c8d;
+            color: #475569;
             font-size: 18px;
             grid-column: 1 / -1;
         }}
@@ -741,15 +741,15 @@ def generate_html(repos: List[Dict], org: str) -> str:
         .loading {{
             text-align: center;
             padding: 40px;
-            color: #3498db;
+            color: #E10101;
         }}
         
         footer {{
             margin-top: 40px;
             padding-top: 20px;
-            border-top: 1px solid #e1e8ed;
+            border-top: 1px solid #e2e8f0;
             text-align: center;
-            color: #7f8c8d;
+            color: #475569;
             font-size: 14px;
         }}
         
@@ -890,7 +890,7 @@ def generate_html(repos: List[Dict], org: str) -> str:
     <div class="container">
         <h1>OWASP Bumper 🚀💪</h1>
         <div class="subtitle">This application aims to help encourage repositories to stay active by giving them a bump of a new issue with one click! 🔔✨</div>
-        <div class="subtitle">Comprehensive listing of all {org} GitHub repositories | <a href="https://github.com/OWASP-BLT/OWASP-Bumper" target="_blank" style="color: #3498db;">View on GitHub</a></div>
+        <div class="subtitle">Comprehensive listing of all {org} GitHub repositories | <a href="https://github.com/OWASP-BLT/OWASP-Bumper" target="_blank" style="color: #E10101;">View on GitHub</a></div>
         
         <div class="controls">
             <div class="search-box">
@@ -969,7 +969,7 @@ def generate_html(repos: List[Dict], org: str) -> str:
         const repos = {json.dumps(repo_data, indent=8)};
         
         let currentFilter = 'all';
-        let currentSort = 'updated-desc';
+        let currentSort = 'activity-desc';
         let searchTerm = '';
         let activityFilter = 'all';
         let hideArchived = true;
