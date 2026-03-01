@@ -4,6 +4,7 @@ Generate an HTML page listing all repositories in the OWASP GitHub organization.
 """
 
 import base64
+import concurrent.futures
 import json
 import os
 import re
@@ -1751,84 +1752,103 @@ Thank you for contributing to the OWASP community!
     
     return html
 
+def _fetch_repo_extra_data(repo: Dict, org: str, token: str, fetch_sparklines: bool, fetch_metadata: bool) -> Dict:
+    """Fetch all extra data for a single repository (sparkline + metadata).
+
+    Modifies *repo* in-place and also returns it, so it can be used both as a
+    concurrent.futures worker target and for direct calls.
+
+    Parameters:
+        repo: Repository dict from the GitHub API (modified in place).
+        org: GitHub organisation name, used as fallback owner.
+        token: GitHub API token; pass empty string to skip authenticated calls.
+        fetch_sparklines: Whether to fetch 52-week participation stats.
+        fetch_metadata: Whether to fetch index.md, PR count, and last commit.
+
+    Returns:
+        The same *repo* dict with sparkline/index_md/open_prs_count/last_commit set.
+    """
+    owner = repo.get("owner", {}).get("login", org)
+    repo_name = repo.get("name", "")
+
+    if not repo_name:
+        repo["sparkline"] = []
+        repo["index_md"] = {}
+        repo["open_prs_count"] = 0
+        repo["last_commit"] = {}
+        return repo
+
+    if fetch_sparklines and token:
+        sparkline_data = fetch_participation_stats(owner, repo_name, token)
+        repo["sparkline"] = sparkline_data if sparkline_data else []
+    else:
+        repo["sparkline"] = []
+
+    if fetch_metadata and token:
+        repo["index_md"] = fetch_index_md(owner, repo_name, token) or {}
+        repo["open_prs_count"] = fetch_open_prs_count(owner, repo_name, token)
+        repo["last_commit"] = fetch_last_commit(owner, repo_name, token) or {}
+    else:
+        repo["index_md"] = {}
+        repo["open_prs_count"] = 0
+        repo["last_commit"] = {}
+
+    return repo
+
+
 def main():
     org = os.environ.get('GITHUB_ORG', 'owasp')
     token = os.environ.get('GITHUB_TOKEN', '')
     output_file = os.environ.get('OUTPUT_FILE', 'index.html')
     fetch_sparklines = os.environ.get('FETCH_SPARKLINES', 'true').lower() == 'true'
     fetch_metadata = os.environ.get('FETCH_METADATA', 'true').lower() == 'true'
-    
+    max_workers = 20
+    try:
+        max_workers = int(os.environ.get('MAX_WORKERS', '20'))
+    except ValueError:
+        print("Warning: MAX_WORKERS is not a valid integer, defaulting to 20", file=sys.stderr)
+
     print(f"Fetching repositories for organization: {org}")
     repos = fetch_repos(org, token)
     print(f"Found {len(repos)} repositories")
-    
-    # Fetch participation stats for sparklines (if enabled)
-    if fetch_sparklines and token:
-        print("Fetching activity sparklines for repositories...")
+
+    if (fetch_sparklines and token) or (fetch_metadata and token):
+        print(f"Fetching extra data for {len(repos)} repositories using {max_workers} parallel workers...")
+        completed = 0
         total = len(repos)
-        for i, repo in enumerate(repos):
-            if (i + 1) % 50 == 0 or i == 0:
-                print(f"  Fetching sparkline data: {i + 1}/{total}")
-            
-            owner = repo.get("owner", {}).get("login", org)
-            repo_name = repo.get("name", "")
-            
-            if repo_name:
-                sparkline_data = fetch_participation_stats(owner, repo_name, token)
-                repo["sparkline"] = sparkline_data if sparkline_data else []
-                
-                # Small delay to avoid rate limiting
-                if (i + 1) % 100 == 0:
-                    time.sleep(1)
-        
-        print(f"  Completed fetching sparkline data for {total} repositories")
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(
+                    _fetch_repo_extra_data, repo, org, token, fetch_sparklines, fetch_metadata
+                ): repo
+                for repo in repos
+            }
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    future.result()  # re-raises any exception; repo dict is modified in place
+                except Exception as exc:
+                    failed_repo = futures[future]
+                    print(f"  Warning: failed to fetch extra data for {failed_repo.get('name', '?')}: {exc}", file=sys.stderr)
+                completed += 1
+                if completed % 100 == 0 or completed == total:
+                    print(f"  Completed {completed}/{total}")
+
+        print(f"  Done fetching extra data for {total} repositories")
     else:
-        print("Skipping sparkline data fetch (FETCH_SPARKLINES=false or no token)")
+        print("Skipping extra data fetch (no token or both FETCH_SPARKLINES and FETCH_METADATA are false)")
         for repo in repos:
             repo["sparkline"] = []
-    
-    # Fetch index.md metadata and PR counts (if enabled)
-    if fetch_metadata and token:
-        print("Fetching index.md metadata and PR counts for repositories...")
-        total = len(repos)
-        for i, repo in enumerate(repos):
-            if (i + 1) % 50 == 0 or i == 0:
-                print(f"  Fetching metadata: {i + 1}/{total}")
-            
-            owner = repo.get("owner", {}).get("login", org)
-            repo_name = repo.get("name", "")
-            
-            if repo_name:
-                # Fetch index.md
-                index_md_data = fetch_index_md(owner, repo_name, token)
-                repo["index_md"] = index_md_data if index_md_data else {}
-                
-                # Fetch PR count
-                pr_count = fetch_open_prs_count(owner, repo_name, token)
-                repo["open_prs_count"] = pr_count
-                
-                # Fetch last commit
-                last_commit_data = fetch_last_commit(owner, repo_name, token)
-                repo["last_commit"] = last_commit_data if last_commit_data else {}
-                
-                # Small delay to avoid rate limiting
-                if (i + 1) % 100 == 0:
-                    time.sleep(1)
-        
-        print(f"  Completed fetching metadata for {total} repositories")
-    else:
-        print("Skipping metadata fetch (FETCH_METADATA=false or no token)")
-        for repo in repos:
             repo["index_md"] = {}
             repo["open_prs_count"] = 0
             repo["last_commit"] = {}
-    
-    print(f"Generating HTML page...")
+
+    print("Generating HTML page...")
     html = generate_html(repos, org.upper())
-    
+
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(html)
-    
+
     print(f"HTML page generated: {output_file}")
 
 if __name__ == "__main__":
