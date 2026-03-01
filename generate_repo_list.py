@@ -744,6 +744,94 @@ def generate_html(repos: List[Dict], org: str) -> str:
             color: #E10101;
         }}
         
+        .table-wrapper {{
+            overflow-x: auto;
+            width: 100%;
+        }}
+        
+        table.repo-table {{
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }}
+        
+        table.repo-table th {{
+            background: #f8fafc;
+            padding: 10px 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #0f172a;
+            border-bottom: 2px solid #e2e8f0;
+            white-space: nowrap;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }}
+        
+        table.repo-table th.sortable {{
+            cursor: pointer;
+            user-select: none;
+        }}
+        
+        table.repo-table th.sortable:hover {{
+            background: #fee2e2;
+            color: #E10101;
+        }}
+        
+        table.repo-table th.sort-active {{
+            background: #fee2e2;
+            color: #E10101;
+        }}
+        
+        table.repo-table td {{
+            padding: 8px 12px;
+            border-bottom: 1px solid #f0f0f0;
+            vertical-align: middle;
+        }}
+        
+        table.repo-table tbody tr:hover td {{
+            background: #fef2f2;
+        }}
+        
+        table.repo-table tbody tr.archived td {{
+            opacity: 0.7;
+            background: #f9f9f9;
+        }}
+        
+        table.repo-table tbody tr.archived:hover td {{
+            background: #f5f5f5;
+        }}
+        
+        .table-name-link {{
+            color: #E10101;
+            text-decoration: none;
+            font-weight: 600;
+        }}
+        
+        .table-name-link:hover {{
+            text-decoration: underline;
+        }}
+        
+        .table-desc {{
+            max-width: 280px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: #666;
+            font-size: 12px;
+        }}
+        
+        .table-num {{
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }}
+        
+        .sort-arrow {{
+            margin-left: 4px;
+            font-size: 10px;
+            opacity: 0.6;
+        }}
+        
         footer {{
             margin-top: 40px;
             padding-top: 20px;
@@ -905,6 +993,10 @@ def generate_html(repos: List[Dict], org: str) -> str:
                 <input type="checkbox" id="hideArchived" checked onchange="toggleHideArchived()">
                 Hide Archived
             </label>
+            <div class="btn-group">
+                <button id="viewCards" class="active" onclick="setViewMode('cards')">🃏 Cards</button>
+                <button id="viewTable" onclick="setViewMode('table')">📋 Table</button>
+            </div>
         </div>
         
         <div class="sort-buttons">
@@ -973,6 +1065,7 @@ def generate_html(repos: List[Dict], org: str) -> str:
         let searchTerm = '';
         let activityFilter = 'all';
         let hideArchived = true;
+        let viewMode = 'cards';
         
         // HTML escape function to prevent XSS
         function escapeHtml(text) {{
@@ -1116,6 +1209,31 @@ Thank you for contributing to the OWASP community!
             renderRepos();
         }}
         
+        function setViewMode(mode) {{
+            viewMode = mode;
+            document.getElementById('viewCards').classList.toggle('active', mode === 'cards');
+            document.getElementById('viewTable').classList.toggle('active', mode === 'table');
+            renderRepos();
+        }}
+        
+        function getSortArrow(colKey) {{
+            if (currentSort === colKey + '-desc') return '↓';
+            if (currentSort === colKey + '-asc') return '↑';
+            return '⇅';
+        }}
+        
+        function sortByColumn(colKey) {{
+            if (currentSort === colKey + '-desc') {{
+                currentSort = colKey + '-asc';
+            }} else {{
+                currentSort = colKey + '-desc';
+            }}
+            document.querySelectorAll('.sort-btn').forEach(b => {{
+                b.classList.toggle('active', b.dataset.sort === currentSort);
+            }});
+            renderRepos();
+        }}
+        
         function sortRepos(repos, sortBy) {{
             const sorted = [...repos];
             
@@ -1218,11 +1336,9 @@ Thank you for contributing to the OWASP community!
             return filtered;
         }}
         
-        function renderRepos() {{
-            const sorted = sortRepos(repos, currentSort);
-            const filtered = filterRepos(sorted);
-            
+        function renderCards(filtered) {{
             const container = document.getElementById('repoList');
+            container.className = 'repo-list';
             
             if (filtered.length === 0) {{
                 container.innerHTML = '<div class="no-results">No repositories match your criteria</div>';
@@ -1321,6 +1437,119 @@ Thank you for contributing to the OWASP community!
             }}).join('');
             
             document.getElementById('visibleCount').textContent = filtered.length;
+        }}
+        
+        function renderTable(filtered) {{
+            const container = document.getElementById('repoList');
+            container.className = '';
+            
+            if (filtered.length === 0) {{
+                container.innerHTML = '<div class="no-results">No repositories match your criteria</div>';
+                document.getElementById('visibleCount').textContent = '0';
+                return;
+            }}
+            
+            const columns = [
+                {{ key: 'name',        label: 'Name',        sortKey: 'name' }},
+                {{ key: 'type',        label: 'Type',        sortKey: null }},
+                {{ key: 'description', label: 'Description', sortKey: null }},
+                {{ key: 'tags',        label: 'Tags',        sortKey: null }},
+                {{ key: 'language',    label: 'Language',    sortKey: null }},
+                {{ key: 'level',       label: 'Level',       sortKey: 'level' }},
+                {{ key: 'stars',       label: '⭐ Stars',    sortKey: 'stars' }},
+                {{ key: 'forks',       label: '🔱 Forks',   sortKey: 'forks' }},
+                {{ key: 'issues',      label: '📝 Issues',  sortKey: 'issues' }},
+                {{ key: 'prs',         label: '🔀 PRs',     sortKey: 'prs' }},
+                {{ key: 'activity',    label: '📈 Activity', sortKey: 'activity' }},
+                {{ key: 'updated',     label: '📅 Updated',  sortKey: 'updated' }},
+                {{ key: 'created',     label: '📅 Created',  sortKey: 'created' }},
+                {{ key: 'bump',        label: 'Bump',        sortKey: null }},
+            ];
+            
+            const thead = columns.map(col => {{
+                if (col.sortKey) {{
+                    const isActive = currentSort.startsWith(col.sortKey + '-');
+                    const arrow = getSortArrow(col.sortKey);
+                    return `<th class="sortable${{isActive ? ' sort-active' : ''}}" onclick="sortByColumn('${{col.sortKey}}')">${{col.label}} <span class="sort-arrow">${{arrow}}</span></th>`;
+                }}
+                return `<th>${{col.label}}</th>`;
+            }}).join('');
+            
+            const rows = filtered.map(repo => {{
+                const yearsSinceUpdate = getYearsSinceUpdate(repo.updated_at);
+                
+                // Type badges
+                const typeBadges = [];
+                if (repo.is_project) typeBadges.push('<span class="badge project">Project</span>');
+                if (repo.is_chapter) typeBadges.push('<span class="badge chapter">Chapter</span>');
+                if (repo.archived) typeBadges.push('<span class="badge archived">Archived</span>');
+                if (yearsSinceUpdate >= 3) typeBadges.push('<span class="badge inactive-3yr" title="No activity in 3+ years">3yr+</span>');
+                else if (yearsSinceUpdate >= 1) typeBadges.push('<span class="badge inactive-1yr" title="No activity in 1+ year">1yr+</span>');
+                
+                // Level badge
+                let levelCell = '';
+                if (repo.level !== null && repo.level !== undefined) {{
+                    const levelClass = repo.level >= 4 ? 'level-4' : repo.level >= 3 ? 'level-3' : repo.level >= 2 ? 'level-2' : 'level-1';
+                    levelCell = `<span class="badge level ${{levelClass}}" title="OWASP Level ${{repo.level}}">L${{repo.level}}</span>`;
+                }}
+                
+                // Language
+                const langCell = repo.language && repo.language !== 'N/A' ? `<span class="badge language">${{escapeHtml(repo.language)}}</span>` : '';
+                
+                // Description (prefer pitch, fall back to description)
+                const descText = repo.pitch || repo.description || 'No description';
+                
+                // Tags (up to 4)
+                const tagsCell = repo.tags && repo.tags.length > 0
+                    ? repo.tags.slice(0, 4).map(t => `<span class="badge tag">${{escapeHtml(t)}}</span>`).join(' ')
+                    : '';
+                
+                // Sparkline
+                const sparklineHtml = generateSparklineSVG(repo.sparkline, 60, 14);
+                
+                // Bump button
+                let bumpButton = '';
+                if (yearsSinceUpdate >= 1) {{
+                    bumpButton = repo.archived
+                        ? `<span class="bump-btn archived" title="Cannot bump archived repositories">🔔</span>`
+                        : `<a href="${{getBumpIssueUrl(repo)}}" target="_blank" class="bump-btn" title="Create a reminder issue in this repository">🔔</a>`;
+                }}
+                
+                // Title (if different from name)
+                const titleHtml = repo.title && repo.title !== repo.name
+                    ? `<div class="repo-title" title="${{escapeHtml(repo.title)}}">${{escapeHtml(repo.title)}}</div>`
+                    : '';
+                
+                return `<tr class="${{repo.archived ? 'archived' : ''}}">
+                    <td><a href="${{repo.html_url}}" target="_blank" class="table-name-link">${{escapeHtml(repo.name)}}</a>${{titleHtml}}</td>
+                    <td><div style="display:flex;gap:3px;flex-wrap:wrap">${{typeBadges.join('')}}</div></td>
+                    <td><div class="table-desc" title="${{escapeHtml(descText)}}">${{escapeHtml(descText)}}</div></td>
+                    <td><div style="display:flex;gap:3px;flex-wrap:wrap">${{tagsCell}}</div></td>
+                    <td>${{langCell}}</td>
+                    <td>${{levelCell}}</td>
+                    <td class="table-num">${{repo.stargazers_count}}</td>
+                    <td class="table-num">${{repo.forks_count}}</td>
+                    <td class="table-num">${{repo.open_issues_count}}</td>
+                    <td class="table-num">${{repo.open_prs_count || 0}}</td>
+                    <td style="white-space:nowrap">${{sparklineHtml}} <span style="font-size:11px;font-weight:600;color:#E10101">${{repo.activity_score}}</span></td>
+                    <td style="white-space:nowrap;font-size:12px">${{getTimeAgo(repo.updated_at)}}</td>
+                    <td style="white-space:nowrap;font-size:12px">${{formatDate(repo.created_at)}}</td>
+                    <td>${{bumpButton}}</td>
+                </tr>`;
+            }}).join('');
+            
+            container.innerHTML = `<div class="table-wrapper"><table class="repo-table"><thead><tr>${{thead}}</tr></thead><tbody>${{rows}}</tbody></table></div>`;
+            document.getElementById('visibleCount').textContent = filtered.length;
+        }}
+        
+        function renderRepos() {{
+            const sorted = sortRepos(repos, currentSort);
+            const filtered = filterRepos(sorted);
+            if (viewMode === 'table') {{
+                renderTable(filtered);
+            }} else {{
+                renderCards(filtered);
+            }}
         }}
         
         function updateStats() {{
