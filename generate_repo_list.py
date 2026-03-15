@@ -932,6 +932,36 @@ def generate_html(repos: List[Dict], org: str) -> str:
             opacity: 0.6;
         }}
         
+        .creation-chart-section {{
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8fafc;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }}
+        
+        .creation-chart-title {{
+            font-size: 16px;
+            font-weight: 600;
+            color: #0f172a;
+            margin-bottom: 15px;
+        }}
+        
+        .creation-chart-wrapper {{
+            overflow-x: auto;
+            width: 100%;
+        }}
+        
+        .creation-chart-bar {{
+            fill: #E10101;
+            opacity: 0.85;
+            transition: opacity 0.2s;
+        }}
+        
+        .creation-chart-bar:hover {{
+            opacity: 1;
+        }}
+        
         footer {{
             margin-top: 40px;
             padding-top: 20px;
@@ -1079,6 +1109,13 @@ def generate_html(repos: List[Dict], org: str) -> str:
         <h1>OWASP Bumper 🚀💪</h1>
         <div class="subtitle">This application aims to help encourage repositories to stay active by giving them a bump of a new issue with one click! 🔔✨</div>
         <div class="subtitle">Comprehensive listing of all {org} GitHub repositories | <a href="https://github.com/OWASP-BLT/OWASP-Bumper" target="_blank" style="color: #E10101;">View on GitHub</a></div>
+        
+        <div class="creation-chart-section">
+            <div class="creation-chart-title">📊 New Repositories Created Over Time</div>
+            <div class="creation-chart-wrapper">
+                <div id="creationChartSvg"></div>
+            </div>
+        </div>
         
         <div class="controls">
             <div class="search-box">
@@ -1742,8 +1779,53 @@ Thank you for contributing to the OWASP community!
             }});
         }});
         
+        function renderCreationChart() {{
+            const yearCounts = {{}};
+            repos.forEach(repo => {{
+                if (repo.created_at) {{
+                    const year = new Date(repo.created_at).getFullYear();
+                    yearCounts[year] = (yearCounts[year] || 0) + 1;
+                }}
+            }});
+            
+            const years = Object.keys(yearCounts).sort();
+            if (years.length === 0) return;
+            
+            const counts = years.map(y => yearCounts[y]);
+            const maxCount = Math.max(...counts);
+            
+            const barWidth = 44;
+            const barGap = 10;
+            const chartHeight = 130;
+            const topPadding = 20;
+            const labelHeight = 22;
+            const svgWidth = years.length * (barWidth + barGap) + barGap;
+            const svgHeight = topPadding + chartHeight + labelHeight;
+            
+            const bars = years.map((year, i) => {{
+                const count = yearCounts[year];
+                const barH = maxCount > 0 ? Math.max(2, (count / maxCount) * chartHeight) : 2;
+                const x = barGap + i * (barWidth + barGap);
+                const y = topPadding + chartHeight - barH;
+                return `<rect class="creation-chart-bar" x="${{x}}" y="${{y}}" width="${{barWidth}}" height="${{barH}}" rx="3">
+                    <title>${{year}}: ${{count}} ${{count === 1 ? 'repository' : 'repositories'}}</title>
+                </rect>
+                <text x="${{x + barWidth / 2}}" y="${{y - 5}}" text-anchor="middle" font-size="11" fill="#0f172a" font-weight="600">${{count}}</text>
+                <text x="${{x + barWidth / 2}}" y="${{topPadding + chartHeight + 16}}" text-anchor="middle" font-size="11" fill="#475569">${{year}}</text>`;
+            }}).join('');
+            
+            const svg = `<svg width="${{svgWidth}}" height="${{svgHeight}}" viewBox="0 0 ${{svgWidth}} ${{svgHeight}}" role="img" aria-label="Bar chart of new repositories created per year">
+                <title>New repositories created per year</title>
+                <line x1="0" y1="${{topPadding + chartHeight}}" x2="${{svgWidth}}" y2="${{topPadding + chartHeight}}" stroke="#e2e8f0" stroke-width="1"/>
+                ${{bars}}
+            </svg>`;
+            
+            document.getElementById('creationChartSvg').innerHTML = svg;
+        }}
+        
         // Initial render
         updateStats();
+        renderCreationChart();
         renderRepos();
     </script>
 </body>
