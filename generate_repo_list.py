@@ -955,11 +955,42 @@ def generate_html(repos: List[Dict], org: str) -> str:
         .creation-chart-bar {{
             fill: #E10101;
             opacity: 0.85;
-            transition: opacity 0.2s;
+            transition: opacity 0.2s, fill 0.2s;
+            cursor: pointer;
         }}
         
         .creation-chart-bar:hover {{
             opacity: 1;
+        }}
+        
+        .creation-chart-bar-selected {{
+            fill: #a00000;
+            opacity: 1;
+        }}
+        
+        .creation-chart-has-selection .creation-chart-bar:not(.creation-chart-bar-selected) {{
+            opacity: 0.35;
+        }}
+        
+        .creation-chart-bar-group {{
+            cursor: pointer;
+        }}
+        
+        .year-filter-clear-btn {{
+            background: none;
+            border: 1px solid #E10101;
+            color: #E10101;
+            border-radius: 4px;
+            padding: 1px 6px;
+            font-size: 11px;
+            cursor: pointer;
+            margin-left: 4px;
+            vertical-align: middle;
+        }}
+        
+        .year-filter-clear-btn:hover {{
+            background: #E10101;
+            color: #fff;
         }}
         
         footer {{
@@ -1111,7 +1142,8 @@ def generate_html(repos: List[Dict], org: str) -> str:
         <div class="subtitle">Comprehensive listing of all {org} GitHub repositories | <a href="https://github.com/OWASP-BLT/OWASP-Bumper" target="_blank" style="color: #E10101;">View on GitHub</a></div>
         
         <div class="creation-chart-section">
-            <div class="creation-chart-title">📊 New Repositories Created Over Time</div>
+            <div class="creation-chart-title">📊 New Repositories Created Over Time<span id="creationYearFilterLabel" style="display:none"> — <span id="creationYearFilterValue"></span> <button class="year-filter-clear-btn" onclick="setCreationYearFilter(null)">✕ Clear</button></span></div>
+            <div class="creation-chart-subtitle" id="creationChartSubtitle" style="font-size:12px;color:#64748b;margin-bottom:8px;">Click a bar to filter repositories by creation year</div>
             <div class="creation-chart-wrapper">
                 <div id="creationChartSvg"></div>
             </div>
@@ -1203,6 +1235,7 @@ def generate_html(repos: List[Dict], org: str) -> str:
         let activityFilter = 'all';
         let hideArchived = true;
         let viewMode = 'cards';
+        let creationYearFilter = null;
         
         // HTML escape function to prevent XSS
         function escapeHtml(text) {{
@@ -1341,6 +1374,17 @@ Thank you for contributing to the OWASP community!
             renderRepos();
         }}
         
+        function setCreationYearFilter(year) {{
+            // Toggle filter - if clicking the same year or passing null, clear it
+            if (year === null || creationYearFilter === year) {{
+                creationYearFilter = null;
+            }} else {{
+                creationYearFilter = year;
+            }}
+            renderCreationChart();
+            renderRepos();
+        }}
+        
         function toggleHideArchived() {{
             hideArchived = document.getElementById('hideArchived').checked;
             renderRepos();
@@ -1456,6 +1500,14 @@ Thank you for contributing to the OWASP community!
                 filtered = filtered.filter(repo => getYearsSinceUpdate(repo.updated_at) >= 1);
             }} else if (activityFilter === '3yr-old') {{
                 filtered = filtered.filter(repo => getYearsSinceUpdate(repo.updated_at) >= 3);
+            }}
+            
+            // Apply creation year filter
+            if (creationYearFilter !== null) {{
+                filtered = filtered.filter(repo => {{
+                    if (!repo.created_at) return false;
+                    return new Date(repo.created_at).getFullYear() === creationYearFilter;
+                }});
             }}
             
             // Apply search
@@ -1802,25 +1854,44 @@ Thank you for contributing to the OWASP community!
             const svgWidth = years.length * (barWidth + barGap) + barGap;
             const svgHeight = topPadding + chartHeight + labelHeight;
             
+            const hasSelection = creationYearFilter !== null;
+            
             const bars = years.map((year, i) => {{
                 const count = yearCounts[year];
                 const barH = maxCount > 0 ? Math.max(2, (count / maxCount) * chartHeight) : 2;
                 const x = barGap + i * (barWidth + barGap);
                 const y = topPadding + chartHeight - barH;
-                return `<rect class="creation-chart-bar" x="${{x}}" y="${{y}}" width="${{barWidth}}" height="${{barH}}" rx="3">
-                    <title>${{year}}: ${{count}} ${{count === 1 ? 'repository' : 'repositories'}}</title>
-                </rect>
-                <text x="${{x + barWidth / 2}}" y="${{y - 5}}" text-anchor="middle" font-size="11" fill="#0f172a" font-weight="600">${{count}}</text>
-                <text x="${{x + barWidth / 2}}" y="${{topPadding + chartHeight + 16}}" text-anchor="middle" font-size="11" fill="#475569">${{year}}</text>`;
+                const isSelected = hasSelection && creationYearFilter === parseInt(year);
+                const barClass = isSelected ? 'creation-chart-bar creation-chart-bar-selected' : 'creation-chart-bar';
+                const labelColor = isSelected ? '#a00000' : '#475569';
+                const labelWeight = isSelected ? '700' : 'normal';
+                const tooltipText = `${{year}}: ${{count}} ${{count === 1 ? 'repository' : 'repositories'}} — click to ${{isSelected ? 'clear filter' : 'filter by this year'}}`;
+                return `<g class="creation-chart-bar-group" onclick="setCreationYearFilter(${{year}})" role="button" tabindex="0" aria-label="Filter by ${{year}}: ${{count}} ${{count === 1 ? 'repository' : 'repositories'}}">
+                    <rect class="${{barClass}}" x="${{x}}" y="${{y}}" width="${{barWidth}}" height="${{barH}}" rx="3">
+                        <title>${{tooltipText}}</title>
+                    </rect>
+                    <text x="${{x + barWidth / 2}}" y="${{y - 5}}" text-anchor="middle" font-size="11" fill="#0f172a" font-weight="600" pointer-events="none">${{count}}</text>
+                    <text x="${{x + barWidth / 2}}" y="${{topPadding + chartHeight + 16}}" text-anchor="middle" font-size="11" fill="${{labelColor}}" font-weight="${{labelWeight}}" pointer-events="none">${{year}}</text>
+                </g>`;
             }}).join('');
             
-            const svg = `<svg width="${{svgWidth}}" height="${{svgHeight}}" viewBox="0 0 ${{svgWidth}} ${{svgHeight}}" role="img" aria-label="Bar chart of new repositories created per year">
+            const svgClass = hasSelection ? 'creation-chart-has-selection' : '';
+            const svg = `<svg class="${{svgClass}}" width="${{svgWidth}}" height="${{svgHeight}}" viewBox="0 0 ${{svgWidth}} ${{svgHeight}}" role="img" aria-label="Bar chart of new repositories created per year">
                 <title>New repositories created per year</title>
                 <line x1="0" y1="${{topPadding + chartHeight}}" x2="${{svgWidth}}" y2="${{topPadding + chartHeight}}" stroke="#e2e8f0" stroke-width="1"/>
                 ${{bars}}
             </svg>`;
             
             document.getElementById('creationChartSvg').innerHTML = svg;
+            
+            // Update filter label
+            const label = document.getElementById('creationYearFilterLabel');
+            if (hasSelection) {{
+                document.getElementById('creationYearFilterValue').textContent = creationYearFilter;
+                label.style.display = 'inline';
+            }} else {{
+                label.style.display = 'none';
+            }}
         }}
         
         // Initial render
