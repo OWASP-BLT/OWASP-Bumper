@@ -850,6 +850,7 @@
                 <button id="filterAll" class="active" onclick="setFilter('all')">All</button>
                 <button id="filterProject" onclick="setFilter('project')">Projects</button>
                 <button id="filterChapter" onclick="setFilter('chapter')">Chapters</button>
+                <button id="filterOther" onclick="setFilter('other')">Other</button>
             </div>
             <label class="checkbox-label">
                 <input type="checkbox" id="hideArchived" checked onchange="toggleHideArchived()">
@@ -915,7 +916,7 @@
         <div id="repoList" class="repo-list"></div>
         
         <footer>
-            Generated on 2026-03-19 12:09:01 UTC | Total: 1351 repositories
+            Generated on 2026-03-19 12:12:41 UTC | Total: 1351 repositories
         </footer>
     </div>
     
@@ -1484,9 +1485,9 @@
                         0,
                         0,
                         6,
-                        3
+                        2
                 ],
-                "activity_score": 15,
+                "activity_score": 14,
                 "last_commit_message": "Merge pull request #74 from OWASP/leader-updates",
                 "last_commit_author": "raesene",
                 "last_commit_avatar_url": "https://avatars.githubusercontent.com/u/68317?v=4",
@@ -1838,7 +1839,7 @@
                 "html_url": "https://github.com/OWASP/Nettacker",
                 "stargazers_count": 4892,
                 "forks_count": 1043,
-                "open_issues_count": 174,
+                "open_issues_count": 175,
                 "open_prs_count": 107,
                 "updated_at": "2026-03-19T08:44:59Z",
                 "created_at": "2017-04-21T12:14:35Z",
@@ -112950,6 +112951,8 @@ Thank you for contributing to the OWASP community!
                 filtered = filtered.filter(repo => repo.is_project);
             } else if (currentFilter === 'chapter') {
                 filtered = filtered.filter(repo => repo.is_chapter);
+            } else if (currentFilter === 'other') {
+                filtered = filtered.filter(repo => !repo.is_project && !repo.is_chapter);
             }
             
             // Apply activity filter
