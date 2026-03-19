@@ -1125,6 +1125,7 @@ def generate_html(repos: List[Dict], org: str) -> str:
                 <button id="filterAll" class="active" onclick="setFilter('all')">All</button>
                 <button id="filterProject" onclick="setFilter('project')">Projects</button>
                 <button id="filterChapter" onclick="setFilter('chapter')">Chapters</button>
+                <button id="filterOther" onclick="setFilter('other')">Other</button>
             </div>
             <label class="checkbox-label">
                 <input type="checkbox" id="hideArchived" checked onchange="toggleHideArchived()">
@@ -1447,6 +1448,8 @@ Thank you for contributing to the OWASP community!
                 filtered = filtered.filter(repo => repo.is_project);
             }} else if (currentFilter === 'chapter') {{
                 filtered = filtered.filter(repo => repo.is_chapter);
+            }} else if (currentFilter === 'other') {{
+                filtered = filtered.filter(repo => !repo.is_project && !repo.is_chapter);
             }}
             
             // Apply activity filter
